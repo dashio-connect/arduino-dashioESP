@@ -81,6 +81,8 @@ void DashioProvision::processMessage(MessageData *messageData) {
     case tcpSetup:
             setTCPport(messageData->idStr);
         break;
+    default:
+        break;
     }
 }
 

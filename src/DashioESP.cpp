@@ -1021,7 +1021,7 @@ bool DashioBLE::isConnected() {
 
 void DashioBLE::initialiseClientHolders() {
     if (bleClients == nullptr) {
-        bleClients = new BLEclientHolder(maxBLEclients);
+        bleClients = new BLEclientHolder[maxBLEclients];
     }
 }
 

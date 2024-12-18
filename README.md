@@ -53,3 +53,7 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 ### 1.2.4 (16 December 2024)
 
 - Keeping pace with changes to NimBLE 2.1.0, with a fix to config (layout) downloading
+
+### 1.2.5 (18 December 2024)
+
+- Fix BLE client allocation bug
