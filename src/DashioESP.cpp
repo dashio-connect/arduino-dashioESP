@@ -44,7 +44,7 @@ const int MQTT_SEND_WAIT_MS = 1000;
 const int MQTT_SEND_BUFFER_MIN = 1024;
 
 // BLE
-const int BLE_MAX_SEND_MESSAGE_LENGTH = 500; // 185 for iPhone 6, but can be up to 517
+const int BLE_MAX_SEND_MESSAGE_LENGTH = 256; // 185 for iPhone 6, but can be up to 517
 
 // ---------------------------------------- WiFi ---------------------------------------
 
@@ -804,8 +804,8 @@ public:
     DashioBLE *local_DashioBLE = nullptr;
 
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo& connInfo) { // BLE callback for when a message is received
-        std::string payload = pCharacteristic->getValue();
-        local_DashioBLE->data.processMessage(payload.c_str(), connInfo.getConnHandle()); /// The message components are stored within the connection where the messageReceived flag is set
+        String bleMessage = String(pCharacteristic->getValue().c_str());
+        local_DashioBLE->data.processMessage(bleMessage, connInfo.getConnHandle()); /// The message components are stored within the connection where the messageReceived flag is set
     }
 };
 
