@@ -61,3 +61,7 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 ### 1.2.6 (26 December 2024)
 
 - Fix intermittent BLE message corruption
+
+### 1.2.7 (28 December 2024)
+
+- Fix for NimBLE task priority issue

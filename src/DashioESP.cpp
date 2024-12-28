@@ -804,8 +804,11 @@ public:
     DashioBLE *local_DashioBLE = nullptr;
 
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo& connInfo) { // BLE callback for when a message is received
-        String bleMessage = String(pCharacteristic->getValue().c_str());
-        local_DashioBLE->data.processMessage(bleMessage, connInfo.getConnHandle()); /// The message components are stored within the connection where the messageReceived flag is set
+        std::string bleStr = pCharacteristic->getValue();
+        if (bleStr.length() > 0) {
+            String bleMessage = String(bleStr.c_str());
+            local_DashioBLE->data.processMessage(bleMessage, connInfo.getConnHandle()); /// The message components are stored within the connection where the messageReceived flag is set
+        }
     }
 };
 
@@ -951,6 +954,9 @@ void DashioBLE::run() {
         }
     }
     
+#ifdef ESP32
+    taskYIELD();
+#endif
     data.checkBuffer();
 }
 
