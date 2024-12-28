@@ -65,3 +65,7 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 ### 1.2.7 (28 December 2024)
 
 - Fix for NimBLE task priority issue
+
+### 1.2.8 (28 December 2024)
+
+- Tidy up for NimBLE modifications

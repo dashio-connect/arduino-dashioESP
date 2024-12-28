@@ -954,9 +954,7 @@ void DashioBLE::run() {
         }
     }
     
-#ifdef ESP32
-    taskYIELD();
-#endif
+    vTaskDelay(1);
     data.checkBuffer();
 }
 
