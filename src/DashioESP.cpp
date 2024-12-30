@@ -54,7 +54,7 @@ DashioWiFi::DashioWiFi(DashioDevice *_dashioDevice) {
     dashioDevice = _dashioDevice;
     
 #ifdef ESP32
-    xTaskCreatePinnedToCore(this->wifiOneSecondTask, "OneSecTask", 2048, this, 0, &wifiOneSecTaskHandle, 0);
+    xTaskCreatePinnedToCore(this->wifiOneSecondTask, "OneSecTask", 2048, this, 0, NULL, 0);
 #endif
 #ifdef ESP8266
     timer.every(1000, onTimerCallback); // 1000ms
@@ -458,7 +458,7 @@ DashioMQTT::DashioMQTT(DashioDevice *_dashioDevice, bool _sendRebootAlarm, bool 
     printMessages = _printMessages;
 
 #ifdef ESP32
-    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckConnTask", 10000, this, 0, &mqttConnectTaskHandle, 0);
+    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckMQTTConnTask", 10000, this, 0, NULL, 0);
 #endif
 }
 
@@ -472,7 +472,7 @@ DashioMQTT::DashioMQTT(DashioDevice *_dashioDevice, bool _sendRebootAlarm, bool 
     }
 
 #ifdef ESP32
-    xTaskCreatePinnedToCore(this->checkConnectionTask, "TasCheckConnTaskk1", 10000, this, 0, &mqttConnectTaskHandle, 0);
+    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckMQTTConnTask", 10000, this, 0, NULL, 0);
 #endif
 }
 
@@ -753,6 +753,8 @@ BLEclientHolder *DashioBLE::bleClients = nullptr;
 uint8_t DashioBLE::maxBLEclients = 1;
 bool DashioBLE::printMessages = false;
 uint32_t DashioBLE::passKey = 0;
+MessageData DashioBLE::data(MQTT_CONN, INCOMING_BUFFER_SIZE);
+std::mutex DashioBLE::mtx;
 
 class ServerCallbacks: public NimBLEServerCallbacks {
 public:
@@ -807,25 +809,28 @@ public:
         std::string bleStr = pCharacteristic->getValue();
         if (bleStr.length() > 0) {
             String bleMessage = String(bleStr.c_str());
+            std::lock_guard<std::mutex> lck(local_DashioBLE->mtx);
             local_DashioBLE->data.processMessage(bleMessage, connInfo.getConnHandle()); /// The message components are stored within the connection where the messageReceived flag is set
         }
     }
 };
 
-DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages) : data(BLE_CONN, INCOMING_BUFFER_SIZE) {
+DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages) {
     dashioDevice = _dashioDevice;
     printMessages = _printMessages;
     maxBLEclients = 1;
     
     initialiseClientHolders();
+    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckBLEconnTask", 4096, this, 0, NULL, 0);
 }
 
-DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _maxBLEclients) : data(BLE_CONN, INCOMING_BUFFER_SIZE) {
+DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _maxBLEclients) {
     dashioDevice = _dashioDevice;
     printMessages = _printMessages;
     maxBLEclients = _maxBLEclients;
     
     initialiseClientHolders();
+    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckBLEconnTask", 4096, this, 0, NULL, 0);
 }
 
 void DashioBLE::bleNotifyValue(const String& message) {
@@ -953,9 +958,14 @@ void DashioBLE::run() {
                 break;
         }
     }
-    
-    vTaskDelay(1);
-    data.checkBuffer();
+}
+
+void DashioBLE::checkConnectionTask(void * parameter) {
+    for(;;) {
+        std::lock_guard<std::mutex> lck(mtx);
+        data.checkBuffer();
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
 }
 
 void DashioBLE::end() {

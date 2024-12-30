@@ -69,3 +69,7 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 ### 1.2.8 (28 December 2024)
 
 - Tidy up for NimBLE modifications
+
+### 1.2.9 (30 December 2024)
+
+- Fix BLE data corruption issues

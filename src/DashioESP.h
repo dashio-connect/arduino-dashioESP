@@ -120,9 +120,6 @@ private:
     void checkAndSendMQTTbuffer();
     void publishMessage(const String& message, MQTTTopicType topic);
     void processConfig();
-#ifdef ESP32
-    TaskHandle_t mqttConnectTaskHandle; // Don't really need to keep this as it's not being used.
-#endif
 
     static void messageReceivedMQTTCallback(MQTTClient *client, char *topic, char *payload, int payload_length);
     void onConnected();
@@ -182,22 +179,24 @@ private:
     NimBLECharacteristic *pCharacteristic = nullptr;
     NimBLEAdvertising *pAdvertising = nullptr;
     bool isConfig = false;
-    
+
     void sendMessage(const String& message, bool cfgOverride);
     void initialiseClientHolders();
     void bleNotifyValue(const String& message);
     void processConfig();
+    static void checkConnectionTask(void * parameter);
     
 public:
     DashioDevice *dashioDevice = nullptr;
     static bool printMessages;
-    MessageData data;
+    static MessageData data;
     void (*processBLEmessageCallback)(MessageData *messageData) = nullptr;
     static uint32_t passKey;
 
     static BLEclientHolder *bleClients;
     static uint8_t maxBLEclients;
-    
+    static std::mutex mtx;
+
     DashioBLE(DashioDevice *_dashioDevice, bool _printMessages = false);
     DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _maxBLEclients);
     void sendMessage(const String& message);
@@ -228,7 +227,6 @@ private:
     DashioMQTT *mqttConnection = nullptr;
 
 #ifdef ESP32
-    TaskHandle_t wifiOneSecTaskHandle; // Don't really need to keep this as it's not being used.
     static void wifiOneSecondTask(void *parameter);
 #endif
 #ifdef ESP8266
