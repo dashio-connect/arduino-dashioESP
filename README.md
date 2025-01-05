@@ -73,3 +73,8 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 ### 1.2.9 (30 December 2024)
 
 - Fix BLE data corruption issues
+
+### 1.2.10 (5 January 2025)
+
+- Fix "mutex" error now occurring for Arduino ESP32 boards V3.1.0
+
