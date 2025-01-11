@@ -78,3 +78,10 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 
 - Fix "mutex" error now occurring for Arduino ESP32 boards V3.1.0
 
+### 1.2.11 (11 January 2025)
+
+- Fix BLE incoming message errors associated with some Android phones/tablets.
+- Fix BLE authentication completion.
+- Make sure incoming BLE messages are correctly reported as BLE, not MQTT.
+
+

@@ -753,7 +753,7 @@ BLEclientHolder *DashioBLE::bleClients = nullptr;
 uint8_t DashioBLE::maxBLEclients = 1;
 bool DashioBLE::printMessages = false;
 uint32_t DashioBLE::passKey = 0;
-MessageData DashioBLE::data(MQTT_CONN, INCOMING_BUFFER_SIZE);
+MessageData DashioBLE::data(BLE_CONN, INCOMING_BUFFER_SIZE);
 std::mutex DashioBLE::mtx;
 
 class ServerCallbacks: public NimBLEServerCallbacks {
@@ -783,19 +783,19 @@ public:
         return local_DashioBLE->passKey;
     };
 
-    void onAuthenticationComplete(ble_gap_conn_desc *desc) {
-        if (desc->sec_state.authenticated) {
+    void onAuthenticationComplete(NimBLEConnInfo& connInfo) {
+        if (connInfo.isAuthenticated()) {
             ESP_LOGI(DTAG, "BLE Authenticated");
         } else {
             ESP_LOGI(DTAG, "BLE Authentication FAIL");
-            local_DashioBLE->setConnectionAuthState(desc->conn_handle, BLE_AUTH_FAIL);
+            local_DashioBLE->setConnectionAuthState(connInfo.getConnHandle(), BLE_AUTH_FAIL);
         }
-        if (desc->sec_state.encrypted) {
+        if (connInfo.isEncrypted()) {
             ESP_LOGI(DTAG, "BLE Encrypted");
         }
-        if (desc->sec_state.bonded) {
+        if (connInfo.isBonded()) {
             ESP_LOGI(DTAG, "BLE Bonded");
-            local_DashioBLE->setConnectionAuthState(desc->conn_handle, BLE_AUTH_REQ_CONN);
+            local_DashioBLE->setConnectionAuthState(connInfo.getConnHandle(), BLE_AUTH_REQ_CONN);
         }
     }
 };
@@ -809,8 +809,12 @@ public:
         std::string bleStr = pCharacteristic->getValue();
         if (bleStr.length() > 0) {
             String bleMessage = String(bleStr.c_str());
+#ifdef ESP32
+    ESP_LOGI(DTAG, "Message: %s", bleStr.c_str());//???
+#endif
             std::lock_guard<std::mutex> lck(local_DashioBLE->mtx);
             local_DashioBLE->data.processMessage(bleMessage, connInfo.getConnHandle()); /// The message components are stored within the connection where the messageReceived flag is set
+            local_DashioBLE->data.checkBuffer(); /// Forces the message to be processed. If only a half message, then it gets it underway and the handle is managed correctly
         }
     }
 };
@@ -963,7 +967,7 @@ void DashioBLE::run() {
 void DashioBLE::checkConnectionTask(void * parameter) {
     for(;;) {
         std::lock_guard<std::mutex> lck(mtx);
-        data.checkBuffer();
+        data.checkBuffer(); // Not really necessary, but just in case.
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }
