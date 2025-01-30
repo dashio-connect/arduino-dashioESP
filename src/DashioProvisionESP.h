@@ -41,7 +41,7 @@
 struct DeviceData {
     char deviceName[32 + 1];
     char wifiSSID[32 + 1];
-    char wifiPassword[63 + 1];
+    char wifiPassword[64 + 1];
     char dashUserName[32 + 1];
     char dashPassword[32 + 1];
     uint16_t tcpPort = DEFAULT_TCP_PORT;
@@ -54,7 +54,7 @@ public:
     Preferences preferences;
 
     char wifiSSID[32 + 1] = "\0";
-    char wifiPassword[63 + 1] = "\0";
+    char wifiPassword[64 + 1] = "\0";
     char dashUserName[32 + 1] = "\0";
     char dashPassword[32 + 1] = "\0";
     uint16_t tcpPort = DEFAULT_TCP_PORT;

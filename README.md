@@ -84,4 +84,8 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 - Fix BLE authentication completion.
 - Make sure incoming BLE messages are correctly reported as BLE, not MQTT.
 
+### 1.2.12 (31 January 2025)
+
+- Fix BLE restart advertising that is causing failure to reconnect.
+
 

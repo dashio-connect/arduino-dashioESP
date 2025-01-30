@@ -774,6 +774,7 @@ public:
     
     void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) {
         ESP_LOGI(DTAG, "BLE Client Disconnected, handle: %d, reason: %d", connInfo.getConnHandle(), reason);
+        NimBLEDevice::startAdvertising(); // Restart advertising for more connections
         local_DashioBLE->setConnectionInactive(connInfo.getConnHandle());
     }
 
