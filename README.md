@@ -88,4 +88,6 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 
 - Fix BLE restart advertising that is causing failure to reconnect.
 
+### 1.2.13 (8 March 2025)
 
+- Added *connectTimeoutS* attribute to WiFi connection; the number of seconds of failed WiFi connection before the ESP reboots. Set to 0 to disable reboot.

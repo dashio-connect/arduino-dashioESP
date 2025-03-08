@@ -26,7 +26,6 @@
 
 #include "DashioESP.h"
 
-#define WIFI_TIMEOUT_S 300 // Restart after 5 minutes
 #ifdef ESP32
     #define C64_MAX_LENGHT 1000
 #endif
@@ -132,7 +131,7 @@ void DashioWiFi::run() {
                 mqttConnection->state = notReady;
             }
 
-            if (wifiConnectCount > WIFI_TIMEOUT_S) { // If too many fails, restart the ESP32. Sometimes ESP32's WiFi gets tied up in a knot.
+            if ((connectTimeoutS > 0) && (wifiConnectCount > connectTimeoutS)) { // If too many fails, restart the ESP32. Sometimes ESP32's WiFi gets tied up in a knot.
                 if (dashioDevice != nullptr) {
                     dashioDevice->onStatusCallback(wifiDisconnected);
                 } else if (mqttConnection != nullptr) { // TODO??? can remove in future

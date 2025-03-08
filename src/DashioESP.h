@@ -238,7 +238,8 @@ private:
 
 public:
     DashioWiFi(DashioDevice *_dashioDevice = nullptr);
-
+    uint16_t connectTimeoutS = 300; // 5 mins
+    
     void attachConnection(DashioTCP *_tcpConnection);
     void attachConnection(DashioMQTT *_mqttConnection);
     void detachTcp();
