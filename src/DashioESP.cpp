@@ -597,9 +597,9 @@ void DashioMQTT::begin() {
         wifiClient.setInsecure();
     }
 
-    mqttClient.begin(mqttHost, mqttPort, wifiClient);
-    mqttClient.setOptions(10, true, 10000);  // 10s timeout
     mqttClient.onMessageAdvanced(messageReceivedMQTTCallback);
+    mqttClient.setOptions(10, true, 25000);  // 10s keep alive, clean session, 25s timeout
+    mqttClient.begin(mqttHost, mqttPort, wifiClient);
   
     setupLWT(); // Once the deviceID is known
     state = disconnected;

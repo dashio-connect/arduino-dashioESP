@@ -91,3 +91,7 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 ### 1.2.13 (8 March 2025)
 
 - Added *connectTimeoutS* attribute to WiFi connection; the number of seconds of failed WiFi connection before the ESP reboots. Set to 0 to disable reboot.
+
+### 1.2.14 (18 March 2025)
+
+- Extend timeouts for slow conditions
