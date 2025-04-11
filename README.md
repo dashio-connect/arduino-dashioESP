@@ -34,49 +34,17 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 For previous releases, please refer to <a href="https://github.com/dashio-connect/arduino-dashio">github.com/dashio-connect/arduino-dashio</a>, which is now obsolete.
 
-### 1.2.0 (30 September 2024)
+### 1.2.14 (18 March 2025)
 
-- Release to Arduino library
+- Extend MQTT timeouts for slow network conditions
 
-### 1.2.1 (1 October 2024)
+### 1.2.13 (8 March 2025)
 
-- Updated library properties
+- Added *connectTimeoutS* attribute to WiFi connection; the number of seconds of failed WiFi connection before the ESP reboots. Set to 0 to disable reboot.
 
-### 1.2.2 (11 December 2024)
+### 1.2.12 (31 January 2025)
 
-- Fix change of use of compiler directive #endif by some Arduino IDE installations
-
-### 1.2.3 (12 December 2024)
-
-- Migrated to NimBLE 2.0.0
-
-### 1.2.4 (16 December 2024)
-
-- Keeping pace with changes to NimBLE 2.1.0, with a fix to config (layout) downloading
-
-### 1.2.5 (18 December 2024)
-
-- Fix BLE client allocation bug
-
-### 1.2.6 (26 December 2024)
-
-- Fix intermittent BLE message corruption
-
-### 1.2.7 (28 December 2024)
-
-- Fix for NimBLE task priority issue
-
-### 1.2.8 (28 December 2024)
-
-- Tidy up for NimBLE modifications
-
-### 1.2.9 (30 December 2024)
-
-- Fix BLE data corruption issues
-
-### 1.2.10 (5 January 2025)
-
-- Fix "mutex" error now occurring for Arduino ESP32 boards V3.1.0
+- Fix BLE restart advertising that is causing failure to reconnect.
 
 ### 1.2.11 (11 January 2025)
 
@@ -84,14 +52,47 @@ For previous releases, please refer to <a href="https://github.com/dashio-connec
 - Fix BLE authentication completion.
 - Make sure incoming BLE messages are correctly reported as BLE, not MQTT.
 
-### 1.2.12 (31 January 2025)
+### 1.2.10 (5 January 2025)
 
-- Fix BLE restart advertising that is causing failure to reconnect.
+- Fix "mutex" error now occurring for Arduino ESP32 boards V3.1.0
 
-### 1.2.13 (8 March 2025)
+### 1.2.9 (30 December 2024)
 
-- Added *connectTimeoutS* attribute to WiFi connection; the number of seconds of failed WiFi connection before the ESP reboots. Set to 0 to disable reboot.
+- Fix BLE data corruption issues
 
-### 1.2.14 (18 March 2025)
+### 1.2.8 (28 December 2024)
 
-- Extend timeouts for slow conditions
+- Tidy up for NimBLE modifications
+
+### 1.2.7 (28 December 2024)
+
+- Fix for NimBLE task priority issue
+
+### 1.2.6 (26 December 2024)
+
+- Fix intermittent BLE message corruption
+
+### 1.2.5 (18 December 2024)
+
+- Fix BLE client allocation bug
+
+### 1.2.4 (16 December 2024)
+
+- Keeping pace with changes to NimBLE 2.1.0, with a fix to config (layout) downloading
+
+### 1.2.3 (12 December 2024)
+
+- Migrated to NimBLE 2.0.0
+
+### 1.2.2 (11 December 2024)
+
+- Fix change of use of compiler directive #endif by some Arduino IDE installations
+
+### 1.2.1 (1 October 2024)
+
+- Updated library properties
+
+### 1.2.0 (30 September 2024)
+
+- Release to Arduino library
+
