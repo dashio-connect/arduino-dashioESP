@@ -624,6 +624,51 @@ void DashioMQTT::onConnected() {
     if (reboot) {
         reboot = false;
         if (sendRebootAlarm) {
+/*
+            esp_reset_reason_t reason = esp_reset_reason();
+            String reasonStr = "Reboot: ";
+            switch (reason) {
+                case ESP_RST_POWERON:
+                    reasonStr += "POWER";
+                    break;
+                case ESP_RST_BROWNOUT:
+                    reasonStr += "BROWNOUT";
+                    break;
+                case ESP_RST_SW:
+                    reasonStr += "SOFTWARE";
+                    break;
+                case ESP_RST_PANIC:
+                    reasonStr += "PANIC";
+                    break;
+                case ESP_RST_EXT:
+                    reasonStr += "EXTERNAL";
+                    break;
+                case ESP_RST_PWR_GLITCH:
+                    reasonStr += "POWER GLITCH";
+                    break;
+                case ESP_RST_CPU_LOCKUP:
+                    reasonStr += "CPU LOCKUP";
+                    break;
+                case ESP_RST_WDT:
+                    reasonStr += "WATCHDOG";
+                    break;
+                case ESP_RST_TASK_WDT:
+                    reasonStr += "TASK WATCHDOG";
+                    break;
+                default:
+                    reasonStr += String(reason);
+            }
+
+// ESP_RST_INT_WDT,    //!< Reset (software or hardware) due to interrupt watchdog
+// ESP_RST_DEEPSLEEP,  //!< Reset after exiting deep sleep mode
+// ESP_RST_SDIO,       //!< Reset over SDIO
+// ESP_RST_USB,        //!< Reset by USB peripheral
+// ESP_RST_JTAG,       //!< Reset by JTAG
+// ESP_RST_EFUSE,      //!< Reset due to efuse error
+// ESP_RST_CPU_LOCKUP, //!< Reset due to CPU lock up (double exception)
+
+            sendAlarmMessage(dashioDevice->getAlarmMessage("ALX", reasonStr, dashioDevice->name));
+*/
             sendAlarmMessage(dashioDevice->getAlarmMessage("ALX", "System Reboot", dashioDevice->name));
         }
     }
@@ -804,17 +849,23 @@ class CharacteristicCallbacks: public NimBLECharacteristicCallbacks {
 public:
     CharacteristicCallbacks(DashioBLE * local_DashioBLE): local_DashioBLE(local_DashioBLE) { }
     DashioBLE *local_DashioBLE = nullptr;
-
+    
     void onWrite(NimBLECharacteristic *pCharacteristic, NimBLEConnInfo& connInfo) { // BLE callback for when a message is received
         std::string bleStr = pCharacteristic->getValue();
         if (bleStr.length() > 0) {
             String bleMessage = String(bleStr.c_str());
 #ifdef ESP32
-    ESP_LOGI(DTAG, "Message: %s", bleStr.c_str());//???
+            ESP_LOGI(DTAG, "Message: %s", bleStr.c_str());//???
 #endif
             std::lock_guard<std::mutex> lck(local_DashioBLE->mtx);
             local_DashioBLE->data.processMessage(bleMessage, connInfo.getConnHandle()); /// The message components are stored within the connection where the messageReceived flag is set
             local_DashioBLE->data.checkBuffer(); /// Forces the message to be processed. If only a half message, then it gets it underway and the handle is managed correctly
+        }
+    }
+
+    void onStatus(NimBLECharacteristic* pCharacteristic, int code) {
+        if (code == 0) {
+            local_DashioBLE->notificationComplete = true;
         }
     }
 };
@@ -841,6 +892,7 @@ void DashioBLE::bleNotifyValue(const String& message) {
     if (printMessages) {
         Serial.println(message);
     }
+    notificationComplete = false;
     pCharacteristic->setValue(message);
     pCharacteristic->notify();
 }
@@ -882,6 +934,7 @@ void DashioBLE::sendMessage(const String& message, bool cfgOverride) {
 
 void DashioBLE::processConfig() {
     isConfig = true;
+    notificationComplete = true;
 
     sendMessage(dashioDevice->getC64ConfigBaseMessage(), true);
 
@@ -898,6 +951,15 @@ void DashioBLE::processConfig() {
             bleNotifyValue(message);
             message = "";
             length = 0;
+            
+            uint8_t count = 0;
+            while (!notificationComplete) {
+                vTaskDelay(1 / portTICK_PERIOD_MS);
+                count++;
+                if (count >= 100) {
+                    notificationComplete = true; // emergency exit
+                }
+            }
         }
     }
     message += String(END_DELIM);
@@ -910,7 +972,7 @@ void DashioBLE::run() {
         for (int i = 0; i < maxBLEclients; i++) {
             if (bleClients[i].authState == BLE_AUTH_REQ_CONN) {
                 bleClients[i].authState = BLE_AUTHENTICATED;
-                sendMessage(dashioDevice->getConnectMessage()); /// This wil go to all BLE clients as Arduino NimBLE doesn't yet allow messagein individual clients
+                sendMessage(dashioDevice->getConnectMessage()); /// This will go to all BLE clients as Arduino NimBLE doesn't yet allow messagein individual clients
                 break; // Remove break when NimBLE can send to specific client/connectionHandle
             }
         }

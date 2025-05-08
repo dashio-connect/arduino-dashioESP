@@ -34,6 +34,10 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 For previous releases, please refer to <a href="https://github.com/dashio-connect/arduino-dashio">github.com/dashio-connect/arduino-dashio</a>, which is now obsolete.
 
+### 1.2.15 (8 April 2025)
+
+- Use NimBLECharacteristicCallbacks onStatus callback to slow low down BLE messages during config to prevent buffer overflow.
+
 ### 1.2.14 (18 March 2025)
 
 - Extend MQTT timeouts for slow network conditions

@@ -197,6 +197,7 @@ public:
     static BLEclientHolder *bleClients;
     static uint8_t maxBLEclients;
     static std::mutex mtx;
+    bool notificationComplete = true;
 
     DashioBLE(DashioDevice *_dashioDevice, bool _printMessages = false);
     DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _maxBLEclients);
