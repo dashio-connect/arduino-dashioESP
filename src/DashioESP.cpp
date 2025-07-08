@@ -359,8 +359,8 @@ void DashioTCP::end() {
     MDNS.end();
 }
 
-void DashioTCP::processConfig(uint16_t index) {
-    sendMessage(dashioDevice->getC64ConfigBaseMessage(), index);
+void DashioTCP::processConfig(uint16_t index, const String& _dashboardID) {
+    sendMessage(dashioDevice->getC64ConfigBaseMessage(_dashboardID), index);
     
     int c64Length = strlen_P(dashioDevice->configC64Str);
     int length = 0;
@@ -400,9 +400,8 @@ bool DashioTCP::checkTCP(int index) {
                     sendMessage(dashioDevice->getConnectMessage(), index);
                     break;
                 case config:
-                    dashioDevice->dashboardID = tcpClientPtr->data.idStr;
                     if (dashioDevice->configC64Str != nullptr) {
-                        processConfig(index);
+                        processConfig(index, tcpClientPtr->data.idStr);
                     } else {
                         if (processTCPmessageCallback != nullptr) {
                             processTCPmessageCallback(&tcpClientPtr->data);
@@ -526,8 +525,8 @@ void DashioMQTT::sendWhoAnnounce() {
     sendMessage(dashioDevice->getWhoMessage(), announce_topic);
 }
 
-void DashioMQTT::processConfig() {
-    sendMessage(dashioDevice->getC64ConfigBaseMessage());
+void DashioMQTT::processConfig(const String& _dashboardID) {
+    sendMessage(dashioDevice->getC64ConfigBaseMessage(_dashboardID));
     
     int c64Length = strlen_P(dashioDevice->configC64Str);
     int length = 0;
@@ -760,9 +759,8 @@ void DashioMQTT::run() {
                     sendMessage(dashioDevice->getConnectMessage());
                     break;
                 case config:
-                    dashioDevice->dashboardID = data.idStr;
                     if (dashioDevice->configC64Str != nullptr) {
-                        processConfig();
+                        processConfig(data.idStr);
                     } else {
                         if (processMQTTmessageCallback != nullptr) {
                             processMQTTmessageCallback(&data);
@@ -889,10 +887,19 @@ DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _
 }
 
 void DashioBLE::bleNotifyValue(const String& message) {
+    uint16_t count = 0;
+    while (!notificationComplete) {
+        vTaskDelay(5 / portTICK_PERIOD_MS);
+        count++;
+        if (count >= 100) {
+            notificationComplete = true; // emergency exit
+        }
+    }
+    notificationComplete = false;
+
     if (printMessages) {
         Serial.println(message);
     }
-    notificationComplete = false;
     pCharacteristic->setValue(message);
     pCharacteristic->notify();
 }
@@ -932,11 +939,11 @@ void DashioBLE::sendMessage(const String& message, bool cfgOverride) {
     }
 }
 
-void DashioBLE::processConfig() {
+void DashioBLE::processConfig(const String& _dashboardID) {
     isConfig = true;
     notificationComplete = true;
 
-    sendMessage(dashioDevice->getC64ConfigBaseMessage(), true);
+    sendMessage(dashioDevice->getC64ConfigBaseMessage(_dashboardID), true);
 
     int maxMessageLength = NimBLEDevice::getMTU() - 3;
     int c64Length = strlen_P(dashioDevice->configC64Str);
@@ -951,15 +958,7 @@ void DashioBLE::processConfig() {
             bleNotifyValue(message);
             message = "";
             length = 0;
-            
-            uint8_t count = 0;
-            while (!notificationComplete) {
-                vTaskDelay(1 / portTICK_PERIOD_MS);
-                count++;
-                if (count >= 100) {
-                    notificationComplete = true; // emergency exit
-                }
-            }
+            vTaskDelay(100 / portTICK_PERIOD_MS); // Or will send messages too quicky
         }
     }
     message += String(END_DELIM);
@@ -1008,9 +1007,8 @@ void DashioBLE::run() {
                 }
                 break;
             case config:
-                dashioDevice->dashboardID = data.idStr;
                 if (dashioDevice->configC64Str != nullptr) {
-                    processConfig();
+                    processConfig(data.idStr);
                 } else {
                     if (processBLEmessageCallback != nullptr) {
                         processBLEmessageCallback(&data);

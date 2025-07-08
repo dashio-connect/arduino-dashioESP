@@ -75,7 +75,7 @@ private:
 
     bool checkTCP(int index);
     void (*processTCPmessageCallback)(MessageData *messageData) = nullptr;
-    void processConfig(uint16_t index);
+    void processConfig(uint16_t index, const String& _dashboardID);
 
 public:
     DashioDevice *dashioDevice = nullptr;
@@ -120,7 +120,7 @@ private:
     void (*processMQTTmessageCallback)(MessageData *messageData) = nullptr;
     void checkAndSendMQTTbuffer();
     void publishMessage(const String& message, MQTTTopicType topic);
-    void processConfig();
+    void processConfig(const String& _dashboardID);
 
     static void messageReceivedMQTTCallback(MQTTClient *client, char *topic, char *payload, int payload_length);
     void onConnected();
@@ -184,7 +184,7 @@ private:
     void sendMessage(const String& message, bool cfgOverride);
     void initialiseClientHolders();
     void bleNotifyValue(const String& message);
-    void processConfig();
+    void processConfig(const String& _dashboardID);
     static void checkConnectionTask(void * parameter);
     
 public:
