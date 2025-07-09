@@ -34,7 +34,7 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 For previous releases, please refer to <a href="https://github.com/dashio-connect/arduino-dashio">github.com/dashio-connect/arduino-dashio</a>, which is now obsolete.
 
-### 1.2.16 (8 July 2025)
+### 1.2.17 (9 July 2025)
 
 - Fix BLE problems 
 
