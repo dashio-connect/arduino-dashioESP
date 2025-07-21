@@ -821,10 +821,15 @@ public:
     }
 
     // Security callback functions
-    uint32_t onPassKeyRequest() {
+    void onPassKeyEntry(NimBLEConnInfo& connInfo) { // Not used
         ESP_LOGI(DTAG,"Server Passkey Request: %d", local_DashioBLE->passKey);
-        return local_DashioBLE->passKey;
-    };
+        NimBLEDevice::injectPassKey(connInfo, local_DashioBLE->passKey);
+    }
+
+    void onConfirmPasskey(NimBLEConnInfo& connInfo, uint32_t pass_key) { // Not used
+        ESP_LOGI(DTAG, "The passkey number: %d", pass_key);
+        NimBLEDevice::injectConfirmPasskey(connInfo, local_DashioBLE->passKey == pass_key);
+    }
 
     void onAuthenticationComplete(NimBLEConnInfo& connInfo) {
         if (connInfo.isAuthenticated()) {
@@ -1046,7 +1051,8 @@ void DashBLE::setPassKey(uint32_t _passKey) {
     
     // Setup BLE security (optional)
     if (secureBLE) {
-        NimBLEDevice::setSecurityAuth(true, true, true); // bool bonding, bool mitm (man in the middle), bool sc
+        NimBLEDevice::setSecurityAuth(true, true, false); // bool bonding, bool mitm (man in the middle), bool sc
+        NimBLEDevice::setSecurityPasskey(passKey);
         NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY); // uint8_t iocap Sets the Input/Output capabilities of this device.
     }
 }
