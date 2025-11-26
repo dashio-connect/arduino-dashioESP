@@ -1,6 +1,6 @@
 <h1 id="toc_0">Dash IoT Guide (ESP8266)</h1>
 
-**12 February 2025**
+**26 November 2025**
 
 This guide demonstrates how to make TCP and MQTT connections to an ESP8266 IoT device using the Arduino or PlatformIO IDE and the **Dash** Adruino library. It also shows how to load user controls (widgets) into your mobile device to monitor and control an IoT device.
 
@@ -31,7 +31,7 @@ You will need to add the **DashESP** library into your project.  It is included 
 - **Dashio** is the core messageing library used to manage messages.
 - **MQTT** by Joël Gähwiler is required for MQTT messaging.
 - **Preferences** by Volodymyr Shymanskyy is used storing WiFi and login credentials etc.
-- **NimBLE-Arduino** by h2zero is required for BLE messaging for the ESP32. It is not required for the ESP8266.
+- **NimBLE-Arduino** by h2zero is required for BLE messaging only for the original ESP32. It is not required for all newer ESP32 variants (e.g. ESP32-S3) or for the ESP8266.
 
 The **arduino-timer** library is also used for the WiFi and MQTT connection and is available in the Arduino IDE Library Manager. Search the library manager for the library titled "arduino-timer" by Michael Contreras and install.
 
@@ -158,7 +158,7 @@ void loop() {
 
 <p>The next step is to show the Dial values from the messages on a control on the <strong>Dash</strong> app.</p>
 
-<p>In the <strong>Dash</strong> app, tap the <img src="https://dashio.io/wp-content/uploads/2021/07/iot_blue_44.png" width="20"> <strong>All Devices</strong> button, followed by the <img src="https://dashio.io/wp-content/uploads/2021/07/magnifying_glass_44_blue.png" width="20"> <strong>Find New Device</strong> button. Then select the <strong>TCP Discovery</strong> option to show a list of new IoT devices that are TCP mDNS enabled. Your IoT device should be shown in the list. Select your device and from the next menu select <strong>Create Device View</strong>. This will create an empty Device View for your new IoT deivce. You can now add controls to the Device View:</p>
+<p>In the <strong>Dash</strong> app, tap the <img src="https://dashio.io/wp-content/uploads/2021/07/iot_blue_44.png" width="20"> <strong>All Devices</strong> button, followed by the <img src="https://dashio.io/wp-content/uploads/2021/07/magnifying_glass_44_blue.png" width="20"> <strong>Find New Device</strong> button. Then select the <strong>TCP Discovery</strong> option to show a list of new IoT devices that are TCP mDNS enabled. Your IoT device should be shown in the list. Select your device and from the next popup menu choose to <strong>Create Device View</strong>. This will create an empty Device View for your new IoT deivce. You can now add controls to the Device View:</p>
 
 <h3 id="toc_8">Adding Controls to Dash App</h3>
 
@@ -426,7 +426,7 @@ This is just the beginning and there is a lot more we can do. Take a look at the
 
 <ul>
 <li><strong>Design your layout</strong> in the <strong>Dash</strong> app and include all controls and connections that you need in your layout.</li>
-<li><strong>Export the layout</strong>: Tap on the <strong>Device</strong> button, then tap the <strong>Export Layout</strong> button.</li>
+<li><strong>Export the layout</strong>: Tap on the <strong>Device</strong> button, then tap the <strong>Developer / Export Layout</strong> button.</li>
 <li><strong>Select the provisioning setup</strong> that you want (see below for provisioning details) and tap the <strong>Export</strong> button. The Layout Configuration will be emailed to you.</li>
 <li><strong>Copy and paste</strong> the C64 configuration text from the email into your Arduino code, assigning it to a pointer to store the text in program memory. Your C64 configuration text will be different to that shown below.</li>
 <li><strong>Add the pointer</strong> to the C64 configuration text (configC64Str) as a second attribute to the DashDevice object.</li>

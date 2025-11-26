@@ -38,16 +38,25 @@
 
 #include <WiFiClientSecure.h>  // Included in the espressif library
 #include <MQTT.h>              // arduino-mqtt library created by Joël Gähwiler.
+
 #ifdef ESP8266
     #include <arduino-timer.h>
     #include <ESP8266WiFi.h>   // Included in the 8266 Arduino library
     #include <ESP8266mDNS.h>   // Included in the 8266 Arduino library
 #endif
+
 #ifdef ESP32
     #include <mutex>
     #include <WiFi.h>
     #include <esp_wifi.h>
-    #include <NimBLEDevice.h>  // ESP32 BLE Arduino library by Neil Kolban. Included in Arduino IDE
+
+    #ifndef CONFIG_IDF_TARGET_ESP32S2
+        #ifdef CONFIG_IDF_TARGET_ESP32
+            #include <NimBLEDevice.h>  // ESP32 BLE Arduino library by Neil Kolban. Included in Arduino IDE
+        #else
+            #include "dashioBLEgap.h"
+        #endif
+    #endif
     #include <ESPmDNS.h>       // Included in the espressif library
 #endif
 
@@ -62,6 +71,7 @@
 
 // ---------------------------------------- TCP ----------------------------------------
 
+#ifndef CONFIG_IDF_TARGET_ESP32H2
 struct TCPclient {
     WiFiClient client;
     MessageData data = MessageData(TCP_CONN);
@@ -157,66 +167,6 @@ public:
     void end();
 };
 
-// ---------------------------------------- BLE ----------------------------------------
-
-#ifdef ESP32
-enum BLEauthState {
-    BLE_NOT_AUTH,
-    BLE_AUTH_REQ_CONN,
-    BLE_AUTH_FAIL,
-    BLE_AUTHENTICATED
-};
-
-struct BLEclientHolder {
-    uint16_t connectionHandle = 65535;
-    bool active = false;
-    BLEauthState authState = BLE_NOT_AUTH;
-};
-
-class DashioBLE {
-private:
-    bool secureBLE = false;
-    NimBLEServer *pServer = nullptr;
-    NimBLECharacteristic *pCharacteristic = nullptr;
-    NimBLEAdvertising *pAdvertising = nullptr;
-    bool isConfig = false;
-
-    void sendMessage(const String& message, bool cfgOverride);
-    void initialiseClientHolders();
-    void bleNotifyValue(const String& message);
-    void processConfig(const String& _dashboardID);
-    static void checkConnectionTask(void * parameter);
-    
-public:
-    DashioDevice *dashioDevice = nullptr;
-    static bool printMessages;
-    static MessageData data;
-    void (*processBLEmessageCallback)(MessageData *messageData) = nullptr;
-    static uint32_t passKey;
-
-    static BLEclientHolder *bleClients;
-    static uint8_t maxBLEclients;
-    static std::mutex mtx;
-    bool notificationComplete = true;
-
-    DashioBLE(DashioDevice *_dashioDevice, bool _printMessages = false);
-    DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _maxBLEclients);
-    void sendMessage(const String& message);
-    void run();
-    void end();
-    void setCallback(void (*processIncomingMessage)(MessageData *messageData));
-    void begin(uint32_t _passKey = 0);
-    String macAddress();
-    void advertise();
-    bool isConnected();
-    void setPassKey(uint32_t _passKey);
-
-    static bool setConnectionActive(uint16_t conn_handle);
-    static void setConnectionInactive(uint16_t conn_handle);
-    static void setConnectionAuthState(uint16_t conn_handle, BLEauthState authState);
-};
-#endif
-
 // ---------------------------------------- WiFi ---------------------------------------
 
 class DashioWiFi {
@@ -252,6 +202,82 @@ public:
     String macAddress();
     String ipAddress();
 };
+#endif
+
+// ---------------------------------------- BLE ----------------------------------------
+
+#if defined(ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S2)
+
+#ifdef CONFIG_IDF_TARGET_ESP32
+enum BLEauthState {
+    BLE_NOT_AUTH,
+    BLE_AUTH_REQ_CONN,
+    BLE_AUTH_FAIL,
+    BLE_AUTHENTICATED
+};
+
+struct BLEclientHolder {
+    uint16_t connectionHandle = 65535;
+    bool active = false;
+    BLEauthState authState = BLE_NOT_AUTH;
+};
+#endif
+
+class DashioBLE {
+private:
+#ifdef CONFIG_IDF_TARGET_ESP32
+    static NimBLEServer *pServer;
+    static NimBLECharacteristic *pCharacteristic;
+    static NimBLEAdvertising *pAdvertising;
+    static uint8_t advNotActiveCount;
+
+    void bleNotifyValue(const String& message);
+    void processConfig(const String& _dashboardID);
+    void sendMessage(const String& message, bool cfgOverride);
+#else {
+    static void messageReceivedCallback(uint16_t conn_handle, char *message, uint16_t length);
+    void processConfig(BLEclientHolder *connection, const String& _dashboardID);
+    void sendMessage(BLEclientHolder *connection, const String& message, bool cfgOverride);
+#endif
+
+    bool secureBLE = false;
+    bool isConfig = false;
+
+    void initialiseClientHolders();
+    static void checkConnectionTask(void * parameter);
+    
+public:
+#ifdef CONFIG_IDF_TARGET_ESP32
+    static uint32_t passKey;
+    static BLEclientHolder *bleClients;
+    static uint8_t maxBLEclients;
+    bool notificationComplete = true;
+#endif
+
+    DashioDevice *dashioDevice = nullptr;
+    static bool printMessages;
+    static MessageData data;
+    void (*processBLEmessageCallback)(MessageData *messageData) = nullptr;
+
+    static std::mutex mtx;
+
+    DashioBLE(DashioDevice *_dashioDevice, bool _printMessages = false);
+    DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _maxBLEclients);
+    void sendMessage(const String& message);
+    void run();
+    void end();
+    void setCallback(void (*processIncomingMessage)(MessageData *messageData));
+    void begin(uint32_t _passKey = 0);
+    String macAddress();
+    void advertise();
+    bool isConnected();
+    void setPassKey(uint32_t _passKey);
+
+    static bool setConnectionActive(uint16_t conn_handle);
+    static void setConnectionInactive(uint16_t conn_handle);
+    static void setConnectionAuthState(uint16_t conn_handle, BLEauthState authState);
+};
+#endif
 
 // --------------------------------------- Soft AP -------------------------------------
 

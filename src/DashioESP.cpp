@@ -47,6 +47,7 @@ const int BLE_MAX_SEND_MESSAGE_LENGTH = 256; // 185 for iPhone 6, but can be up 
 
 // ---------------------------------------- WiFi ---------------------------------------
 
+#ifndef CONFIG_IDF_TARGET_ESP32H2
 bool DashioWiFi::oneSecond = false;
 
 DashioWiFi::DashioWiFi(DashioDevice *_dashioDevice) {
@@ -788,15 +789,45 @@ void DashioMQTT::end() {
     sendMessage(dashioDevice->getOfflineMessage());
     mqttClient.disconnect();
 }
+#endif
 
 // ---------------------------------------- BLE ----------------------------------------
-#ifdef ESP32
-BLEclientHolder *DashioBLE::bleClients = nullptr;
-uint8_t DashioBLE::maxBLEclients = 1;
+#if defined(ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S2)
+
 bool DashioBLE::printMessages = false;
-uint32_t DashioBLE::passKey = 0;
 MessageData DashioBLE::data(BLE_CONN, INCOMING_BUFFER_SIZE);
 std::mutex DashioBLE::mtx;
+
+#ifdef CONFIG_IDF_TARGET_ESP32
+NimBLEServer *DashioBLE::pServer = nullptr;
+NimBLECharacteristic *DashioBLE::pCharacteristic = nullptr;
+NimBLEAdvertising *DashioBLE::pAdvertising = nullptr;
+uint8_t DashioBLE::maxBLEclients = 1;
+uint32_t DashioBLE::passKey = 0;
+uint8_t DashioBLE::advNotActiveCount = 0;
+BLEclientHolder *DashioBLE::bleClients = nullptr;
+
+DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages) {
+    dashioDevice = _dashioDevice;
+    printMessages = _printMessages;
+    maxBLEclients = 1;
+    
+    initialiseClientHolders();
+    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckBLEconnTask", 4096, this, 0, NULL, 0);
+}
+
+DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _maxBLEclients) {
+    dashioDevice = _dashioDevice;
+    printMessages = _printMessages;
+    maxBLEclients = _maxBLEclients;
+    
+    initialiseClientHolders();
+    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckBLEconnTask", 4096, this, 0, NULL, 0);
+}
+
+void DashioBLE::setCallback(void (*processIncomingMessage)(MessageData *messageData)) {
+    processBLEmessageCallback = processIncomingMessage;
+}
 
 class ServerCallbacks: public NimBLEServerCallbacks {
 public:
@@ -816,8 +847,8 @@ public:
     
     void onDisconnect(NimBLEServer* pServer, NimBLEConnInfo& connInfo, int reason) {
         ESP_LOGI(DTAG, "BLE Client Disconnected, handle: %d, reason: %d", connInfo.getConnHandle(), reason);
-        NimBLEDevice::startAdvertising(); // Restart advertising for more connections
         local_DashioBLE->setConnectionInactive(connInfo.getConnHandle());
+        NimBLEDevice::startAdvertising(); // Restart advertising for more connections
     }
 
     // Security callback functions
@@ -857,9 +888,7 @@ public:
         std::string bleStr = pCharacteristic->getValue();
         if (bleStr.length() > 0) {
             String bleMessage = String(bleStr.c_str());
-#ifdef ESP32
             ESP_LOGI(DTAG, "Message: %s", bleStr.c_str());//???
-#endif
             std::lock_guard<std::mutex> lck(local_DashioBLE->mtx);
             local_DashioBLE->data.processMessage(bleMessage, connInfo.getConnHandle()); /// The message components are stored within the connection where the messageReceived flag is set
             local_DashioBLE->data.checkBuffer(); /// Forces the message to be processed. If only a half message, then it gets it underway and the handle is managed correctly
@@ -872,24 +901,6 @@ public:
         }
     }
 };
-
-DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages) {
-    dashioDevice = _dashioDevice;
-    printMessages = _printMessages;
-    maxBLEclients = 1;
-    
-    initialiseClientHolders();
-    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckBLEconnTask", 4096, this, 0, NULL, 0);
-}
-
-DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _maxBLEclients) {
-    dashioDevice = _dashioDevice;
-    printMessages = _printMessages;
-    maxBLEclients = _maxBLEclients;
-    
-    initialiseClientHolders();
-    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckBLEconnTask", 4096, this, 0, NULL, 0);
-}
 
 void DashioBLE::bleNotifyValue(const String& message) {
     uint16_t count = 0;
@@ -960,14 +971,14 @@ void DashioBLE::processConfig(const String& _dashboardID) {
         message += myChar;
         length++;
         if (length == maxMessageLength) {
-            bleNotifyValue(message);
+            sendMessage(message, true);
             message = "";
             length = 0;
             vTaskDelay(100 / portTICK_PERIOD_MS); // Or will send messages too quicky
         }
     }
     message += String(END_DELIM);
-    bleNotifyValue(message);
+    sendMessage(message, true);
     isConfig = false;
 }
 
@@ -1031,6 +1042,22 @@ void DashioBLE::run() {
 
 void DashioBLE::checkConnectionTask(void * parameter) {
     for(;;) {
+        // Monitor advertising, because sometimes it stops
+        if (NimBLEDevice::getServer() != nullptr) {
+            NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+            if (adv != nullptr) {
+                if (!adv->isAdvertising()) {
+                    if (pServer->getConnectedCount() < maxBLEclients) {
+                        advNotActiveCount++;
+                        if (advNotActiveCount >= 10) { // 1 second
+                            advNotActiveCount = 0;
+                            adv->start();
+                        }
+                    }
+                }
+            }
+        }
+        
         std::lock_guard<std::mutex> lck(mtx);
         data.checkBuffer(); // Not really necessary, but just in case.
         vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -1041,10 +1068,6 @@ void DashioBLE::end() {
     NimBLEDevice::deinit(true);
 }
 
-void DashioBLE::setCallback(void (*processIncomingMessage)(MessageData *messageData)) {
-    processBLEmessageCallback = processIncomingMessage;
-}
-    
 void DashBLE::setPassKey(uint32_t _passKey) {
     passKey = _passKey;
     secureBLE = (String(passKey).length() == 6);
@@ -1080,9 +1103,9 @@ void DashioBLE::begin(uint32_t _passKey) {
     // Setup BLE advertising
     pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
-    pAdvertising->enableScanResponse(true);      // New function in NimBLE 2.0.0 - Please make sure you are using NimBLE 2.X.X
-    pAdvertising->setName(localName);            // New function in NimBLE 2.0.0 - Please make sure you are using NimBLE 2.X.X
-    pAdvertising->setPreferredParams(0x06,0x12); // New function in NimBLE 2.0.0 - Please make sure you are using NimBLE 2.X.X
+    pAdvertising->enableScanResponse(true);
+    pAdvertising->setName(localName);
+    pAdvertising->setPreferredParams(0x06,0x12);
     pAdvertising->start();
 }
     
@@ -1155,8 +1178,256 @@ void DashioBLE::setConnectionAuthState(uint16_t conn_handle, BLEauthState authSt
         }
     }
 }
+#else
+DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages) {
+    dash_log_sync_with_esp32(); // So DASH_LOGE works
 
-// -------------------------------------------------------------------------------------
+    dashioDevice = _dashioDevice;
+    printMessages = _printMessages;
+    maxBLEclients = 1;
+    
+    char localName[64];  // adjust size as needed
+    strcpy(localName, "DashIO_");
+    strcat(localName, dashioDevice->type.c_str());
+    ble_init(&messageReceivedCallback, localName);
+
+    initialiseClientHolders();
+    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckBLEconnTask", 4096, this, 0, NULL, 0);
+}
+
+DashioBLE::DashioBLE(DashioDevice *_dashioDevice, bool _printMessages, uint8_t _maxBLEclients) {
+    dash_log_sync_with_esp32(); // So DASH_LOGE works
+
+    dashioDevice = _dashioDevice;
+    printMessages = _printMessages;
+    maxBLEclients = _maxBLEclients;
+    
+    char localName[64];  // adjust size as needed
+    strcpy(localName, "DashIO_");
+    strcat(localName, dashioDevice->type.c_str());
+    ble_init(&messageReceivedCallback, localName);
+
+    initialiseClientHolders();
+    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckBLEconnTask", 4096, this, 0, NULL, 0);
+}
+
+void DashioBLE::sendMessage(BLEclientHolder *connection, const String& message, bool cfgOverride) {
+    if ((connection != NULL) && (!isConfig || cfgOverride)) {
+        uint16_t maxMessageLength = connection->mtu - 3;
+
+        if (message.length() <= maxMessageLength) {
+            bleNotifyValue(connection->connectionHandle, message.c_str(), message.length());
+        } else {
+            int messageLength = message.length();
+            int numFullStrings = messageLength / maxMessageLength;
+
+            String subStr((char *)0);
+            subStr.reserve(maxMessageLength);
+
+            int start = 0;
+            for (unsigned int i = 0; i < numFullStrings; i++) {
+                subStr = message.substring(start, maxMessageLength);
+                bleNotifyValue(connection->connectionHandle, subStr.c_str(), subStr.length());
+                start += maxMessageLength;
+            }
+            if (start < messageLength) {
+                subStr = message.substring(start);
+                bleNotifyValue(connection->connectionHandle, subStr.c_str(), subStr.length());
+            }
+        }
+    }
+
+    if (printMessages) {
+        ESP_LOGI(DTAG, "---- BLE Sent ---- ConnHndle: %d", connection->connectionHandle);
+        ESP_LOGI(DTAG, "%s\n", message.c_str());
+    }
+}
+
+void DashioBLE::sendMessage(const String& message) {
+    if (bleClients != NULL) {
+        for (int i = 0; i < maxBLEclients; i++) {
+            BLEclientHolder connectionHolder = bleClients[i];
+            if (connectionHolder.active) {
+                sendMessage(&connectionHolder, message, false);
+            }
+        }
+    }
+}
+
+void DashioBLE::processConfig(BLEclientHolder *connection, const String& _dashboardID) {
+    isConfig = true;
+
+    sendMessage(connection, dashioDevice->getC64ConfigBaseMessage(_dashboardID), true);
+
+    uint16_t maxMessageLength = connection->mtu - 3;
+    int c64Length = strlen_P(dashioDevice->configC64Str);
+    int length = 0;
+    String message = "";
+    for (int k = 0; k < c64Length; k++) {
+        char myChar = pgm_read_byte_near(dashioDevice->configC64Str + k);
+
+        message += myChar;
+        length++;
+        if (length == maxMessageLength) {
+            sendMessage(connection, message, true);
+            message = "";
+            length = 0;
+            vTaskDelay(100 / portTICK_PERIOD_MS); // Or will send messages too quicky
+        }
+    }
+    message += String(END_DELIM);
+    sendMessage(connection, message, true);
+    isConfig = false;
+}
+
+void DashioBLE::run() {
+    if (secureBLE && (bleClients != nullptr)) {
+        for (int i = 0; i < maxBLEclients; i++) {
+            if (bleClients[i].authState == BLE_AUTH_REQ_CONN) {
+                bleClients[i].authState = BLE_AUTHENTICATED;
+                sendMessage(dashioDevice->getConnectMessage()); /// This will go to all BLE clients as Arduino NimBLE doesn't yet allow messagein individual clients
+                break; // Remove break when NimBLE can send to specific client/connectionHandle
+            }
+        }
+    }
+
+    if (data.messageReceived) {
+        data.messageReceived = false;
+
+        struct BLEclientHolder *connection = getConnection(data.connectionHandle);
+        
+        if (printMessages) {
+            Serial.println(data.getReceivedMessageForPrint(dashioDevice->getControlTypeStr(data.control)));
+        }
+        
+        switch (data.control) {
+            case who:
+                sendMessage(connection, dashioDevice->getWhoMessage(), false);
+                break;
+            case connect: {
+                    bool startAuth = false;
+                    if (secureBLE && (bleClients != nullptr)) {
+                        for (int i = 0; i < maxBLEclients; i++) {
+                            if (bleClients[i].connectionHandle == data.connectionHandle) {
+                                if (bleClients[i].authState == BLE_NOT_AUTH) {
+                                    startAuth = true;
+                                }
+                            }
+                        }
+                    }
+                    if (startAuth) {
+                        ble_start_security(data.connectionHandle);
+                    } else {
+                        sendMessage(connection, dashioDevice->getConnectMessage(), false);
+                    }
+                }
+                break;
+            case config:
+                if (dashioDevice->configC64Str != nullptr) {
+                    processConfig(connection, data.idStr);
+                } else {
+                    if (processBLEmessageCallback != nullptr) {
+                        processBLEmessageCallback(&data);
+                    }
+                }
+                break;
+            default:
+                if (processBLEmessageCallback != nullptr) {
+                    processBLEmessageCallback(&data);
+                }
+                break;
+        }
+    }
+}
+
+void DashioBLE::checkConnectionTask(void * parameter) {
+    for(;;) {
+        std::lock_guard<std::mutex> lck(mtx);
+        data.checkBuffer(); // Not really necessary, but just in case.
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
+}
+
+void DashioBLE::end() {
+    ble_stop();
+}
+
+void DashioBLE::setCallback(void (*processIncomingMessage)(MessageData *messageData)) {
+    processBLEmessageCallback = processIncomingMessage;
+}
+
+void DashioBLE::messageReceivedCallback(uint16_t conn_handle, char *message, uint16_t length) {
+    if (length > 0) {
+        String bleMessage = String(message, length);
+        if (printMessages) {
+            ESP_LOGI(DTAG, "Message: %s", bleMessage.c_str());//???
+        }
+        std::lock_guard<std::mutex> lck(mtx);
+        data.processMessage(bleMessage, conn_handle); /// The message components are stored within the connection where the messageReceived flag is set
+        data.checkBuffer(); /// Forces the message to be processed. If only a half message, then it gets it underway and the handle is managed correctly
+    }
+}
+
+void DashBLE::setPassKey(uint32_t _passKey) {
+    ble_secure(_passKey);
+    secureBLE = (String(_passKey).length() == 6);
+}
+        
+void DashioBLE::begin(uint32_t _passKey) {
+    if ((String(_passKey).length() == 6)) { // Don't remove passKey if it has been previously set
+        setPassKey(_passKey);
+    }
+
+    ble_begin();
+}
+    
+String DashioBLE::macAddress() {
+    ble_addr_t addr;
+    uint8_t addr_val[6];
+    uint8_t addr_type;
+
+    // Get the identity address type and value
+    int rc = ble_hs_id_copy_addr(BLE_ADDR_PUBLIC, addr_val, NULL);
+    if (rc != 0) {
+        // If there is no public address, use the random one
+        rc = ble_hs_id_copy_addr(BLE_ADDR_RANDOM, addr_val, NULL);
+    }
+
+    if (rc == 0) {
+        char addr_str[18];
+        sprintf(addr_str, "%02X:%02X:%02X:%02X:%02X:%02X",
+                addr_val[5], addr_val[4], addr_val[3],
+                addr_val[2], addr_val[1], addr_val[0]);
+
+        return addr_str;
+    } else {
+        ESP_LOGE(DTAG, "Failed to get BLE address");
+        return "";
+    }
+}
+
+void DashioBLE::advertise() {
+    ble_advertise();
+}
+
+bool DashioBLE::isConnected() {
+    for (int i = 0; i < maxBLEclients; i++) {
+        if (bleClients[i].active == true) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void DashioBLE::initialiseClientHolders() {
+    if (bleClients == nullptr) {
+        bleClients = new BLEclientHolder[maxBLEclients];
+    }
+}
 
 #endif
+
+#endif
+// -------------------------------------------------------------------------------------
+
 #endif
