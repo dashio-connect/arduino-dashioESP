@@ -399,7 +399,7 @@ static void ble_on_sync(void) {
     // Figure out address to use while advertising (no privacy for now)
     rc = ble_hs_id_infer_auto(0, &own_addr_type);
     if (rc != 0) {
-        DASH_LOGE(tag, "error determining address type; rc=%d", rc);
+        DASH_LOGE(tag, "Error determining address type; rc=%d", rc);
         return;
     }
 
