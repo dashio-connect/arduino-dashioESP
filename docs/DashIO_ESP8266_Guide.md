@@ -31,7 +31,6 @@ You will need to add the **DashESP** library into your project.  It is included 
 - **Dashio** is the core messageing library used to manage messages.
 - **MQTT** by Joël Gähwiler is required for MQTT messaging.
 - **Preferences** by Volodymyr Shymanskyy is used storing WiFi and login credentials etc.
-- **NimBLE-Arduino** by h2zero is required for BLE messaging only for the original ESP32. It is not required for all newer ESP32 variants (e.g. ESP32-S3) or for the ESP8266.
 
 The **arduino-timer** library is also used for the WiFi and MQTT connection and is available in the Arduino IDE Library Manager. Search the library manager for the library titled "arduino-timer" by Michael Contreras and install.
 

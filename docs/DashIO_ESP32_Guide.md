@@ -1,6 +1,6 @@
 <h1 id="toc_0">Dash IoT Guide (ESP32)</h1>
 
-**25 November 2025**
+**28 November 2025**
 
 This guide demonstrates how to make BLE, TCP and MQTT connections to an ESP32 IoT device using the Arduino or PlatformIO IDE and the **DashIO** Adruino library. It also shows how to load user controls (widgets) into your mobile device to monitor and control an IoT device.
 
@@ -29,9 +29,10 @@ If you haven't yet installed the ESP32 Arduino IDE support from espressif, pleas
 You will need to add the **DashioESP** library into your project.  It is included in the Arduino IDE Library manager. Search the library manager for the library titled "DashioESP" and install. The Arduino IDE may also ask you to install the following libraries (dependencies). Please make sure they are all installed from the Arduino IDE Library Manager.
 
 - **Dashio** is the core messageing library used to manage messages.
-- **NimBLE-Arduino** by h2zero is required for BLE messaging. 
 - **MQTT** by Joël Gähwiler is required for MQTT messaging.
 - **Preferences** by Volodymyr Shymanskyy is used storing WiFi and login credentials etc.
+- **NimBLE-Arduino** by h2zero is required for BLE messaging only for the original ESP32. It is not required for all newer ESP32 variants (e.g. ESP32-S3).
+
 
 <h3 id="toc_5">PlatformIO</h3>
 

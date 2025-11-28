@@ -32,11 +32,9 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 ## Release Notes
 
-For previous releases, please refer to <a href="https://github.com/dashio-connect/arduino-dashio">github.com/dashio-connect/arduino-dashio</a>, which is now obsolete.
-
 ### 1.3.0 (26 November 2025)
 
-- Added direct ESP32 BLE stack NimBLE functionality. Only the original ESP32 uses NimBLE-Arduino. All others use the new functionality.
+- Added direct BLE stack NimBLE functionality. Only the original ESP32 uses NimBLE-Arduino. All others use the new functionality.
 
 ### 1.2.18 (21 July 2025)
 
