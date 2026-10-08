@@ -1,3 +1,5 @@
+#if defined(ARDUINO_ARCH_ESP32)
+
 #ifndef dashioBLEgap_H
 #define dashioBLEgap_H
 
@@ -60,4 +62,5 @@ void bleNotifyValue(uint16_t conn_handle, const char *message, uint16_t length);
 
 #endif
 
+#endif
 #endif

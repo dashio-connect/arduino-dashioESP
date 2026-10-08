@@ -1,6 +1,6 @@
 <h1 id="toc_0">Dash IoT Guide (ESP8266)</h1>
 
-**26 November 2025**
+**14 July 2026**
 
 This guide demonstrates how to make TCP and MQTT connections to an ESP8266 IoT device using the Arduino or PlatformIO IDE and the **Dash** Adruino library. It also shows how to load user controls (widgets) into your mobile device to monitor and control an IoT device.
 
@@ -157,7 +157,7 @@ void loop() {
 
 <p>The next step is to show the Dial values from the messages on a control on the <strong>Dash</strong> app.</p>
 
-<p>In the <strong>Dash</strong> app, tap the <img src="https://dashio.io/wp-content/uploads/2021/07/iot_blue_44.png" width="20"> <strong>All Devices</strong> button, followed by the <img src="https://dashio.io/wp-content/uploads/2021/07/magnifying_glass_44_blue.png" width="20"> <strong>Find New Device</strong> button. Then select the <strong>TCP Discovery</strong> option to show a list of new IoT devices that are TCP mDNS enabled. Your IoT device should be shown in the list. Select your device and from the next popup menu choose to <strong>Create Device View</strong>. This will create an empty Device View for your new IoT deivce. You can now add controls to the Device View:</p>
+<p>In the <strong>Dash</strong> app, tap the <img src="https://dashio.io/wp-content/uploads/2026/07/iot_many_blue_44.png" width="20"> <strong>All Devices</strong> button, followed by the <img src="https://dashio.io/wp-content/uploads/2021/07/magnifying_glass_44_blue.png" width="20"> <strong>Find New Device</strong> button. Then select the <strong>TCP Discovery</strong> option to show a list of new IoT devices that are TCP mDNS enabled. Your IoT device should be shown in the list. Select your device and from the next popup menu choose to <strong>Create Device View</strong>. This will create an empty Device View for your new IoT deivce. You can now add controls to the Device View:</p>
 
 <h3 id="toc_8">Adding Controls to Dash App</h3>
 
@@ -385,7 +385,7 @@ void loop() {
 }
 ```
 
-<p>Run the <strong>Dash</strong> app once more. Tap the <img src="https://dashio.io/wp-content/uploads/2021/07/iot_blue_44.png" width="20"> <strong>All Devices</strong> button, followed by the <img src="https://dashio.io/wp-content/uploads/2021/07/magnifying_glass_44_blue.png" width="20"> <strong>Find New Devices</strong> button. Then select the <strong>My Devices On Dash</strong> option to show a list of new IoT devices that have announced themselves to the <strong>dash</strong> server. Your device will be shown (named "Bob Name"). Select your IoT device to add the MQTT connection to your existing IoT device with the TCP connection.</p>
+<p>Run the <strong>Dash</strong> app once more. Tap the <img src="https://dashio.io/wp-content/uploads/2026/07/iot_many_blue_44.png" width="20"> <strong>All Devices</strong> button, followed by the <img src="https://dashio.io/wp-content/uploads/2021/07/magnifying_glass_44_blue.png" width="20"> <strong>Find New Devices</strong> button. Then select the <strong>My Devices On Dash</strong> option to show a list of new IoT devices that have announced themselves to the <strong>dash</strong> server. Your device will be shown (named "Bob Name"). Select your IoT device to add the MQTT connection to your existing IoT device with the TCP connection.</p>
 
 For the next step, you will need to setup your **Dash** app with Dial and Knob controls, as described in the section above **Adding Controls to Dash App**.
 
@@ -629,7 +629,7 @@ void onProvisionCallback(ConnectionType connectionType, const String& message, b
 
 <The callback has two purposes. Firstly, we send a message back to the <strong>Dash</strong> app to let it know that provisioning is complete. And secondly, if the WiFi or MQTT connection credentials have changed, we need to restart the WiFi or MQTT connection. In the above example we call <code>mqtt_con.setup</code> to update the MQTT connection with the new username and password and <code>wifi.begin</code> to update wifi with the new SSID and password. Alternatively, you could reboot the processor for a fresh start which would also update the MQTT connection and WiFi credentials.
 
-To provision your device, run the <strong>Dash</strong> app and tap the <img src="https://dashio.io/wp-content/uploads/2021/07/iot_blue_44.png" width="20"> <strong>All Devices</strong> button and select your device. Tap the <img src="https://dashio.io/wp-content/uploads/2022/09/key_44_blue.png" width="20"> <strong>Provisioning</strong> button and follow the instructions.
+To provision your device, run the <strong>Dash</strong> app and tap the <img src="https://dashio.io/wp-content/uploads/2026/07/iot_many_blue_44.png" width="20"> <strong>All Devices</strong> button and select your device. Tap the <img src="https://dashio.io/wp-content/uploads/2022/09/key_44_blue.png" width="20"> <strong>Provisioning</strong> button and follow the instructions.
 
 The final provisioning feature is the ability to "Reset" your IoT device. The **Dash** app provisioning menu also includes a "Reset Device" button. In your IoT device, you will receive an incoming message of ControlType = ***resetDevice*** which you can manage in your ```processIncomingMessage``` callback as shown in the following example:
 

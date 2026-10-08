@@ -1,3 +1,5 @@
+#if defined(ARDUINO_ARCH_ESP32)
+
 #include "sdkconfig.h"
 #if !defined(CONFIG_IDF_TARGET_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S2)
 
@@ -548,4 +550,5 @@ void ble_stop() {
     }
 }
 
+#endif
 #endif

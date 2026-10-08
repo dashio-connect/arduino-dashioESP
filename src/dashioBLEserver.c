@@ -1,3 +1,5 @@
+#if defined(ARDUINO_ARCH_ESP32)
+
 #include "sdkconfig.h"
 #if !defined(CONFIG_IDF_TARGET_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S2)
 
@@ -156,4 +158,5 @@ int dash_server_init(void) {
     return 0;
 }
 
+#endif
 #endif

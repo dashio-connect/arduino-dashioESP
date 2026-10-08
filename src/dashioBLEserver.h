@@ -1,3 +1,5 @@
+#if defined(ARDUINO_ARCH_ESP32)
+
 #ifndef dashBLEsever_H
 #define dashBLEsever_H
 
@@ -47,4 +49,5 @@ extern dash_message_received_fn *on_dash_server_message_received;
 
 #endif
 
+#endif
 #endif

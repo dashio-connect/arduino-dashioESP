@@ -32,6 +32,10 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 ## Release Notes
 
+### 1.3.1 (8 October 2026)
+
+- Repair ESP8266 compile linker
+
 ### 1.3.0 (26 November 2025)
 
 - Added direct BLE stack NimBLE functionality. Only the original ESP32 uses NimBLE-Arduino. All others use the new functionality.
