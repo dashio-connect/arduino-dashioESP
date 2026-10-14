@@ -32,6 +32,11 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 ## Release Notes
 
+### 1.3.2 (14 October 2026)
+
+- Fix BLE init crash
+- Allow MQTT QoS to be adjustable and Online/Offline messages to be optional
+
 ### 1.3.1 (8 October 2026)
 
 - Repair ESP8266 compile linker

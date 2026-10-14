@@ -36,7 +36,6 @@
 const int INCOMING_BUFFER_SIZE = 512;
 
 // MQTT
-const int MQTT_QOS = 2;
 const int MQTT_RETRY_S = 10; // Retry after 10 seconds
 const int MQTT_CLIENT_BUFFER_SIZE = 2048;
 const int MQTT_SEND_WAIT_MS = 1000;
@@ -497,7 +496,7 @@ void DashioMQTT::checkAndSendMQTTbuffer() {
 void DashioMQTT::publishMessage(const String& message, MQTTTopicType topic) {
     if (mqttClient.connected()) {
         String publishTopic = dashioDevice->getMQTTTopic(username, topic);
-        mqttClient.publish(publishTopic.c_str(), message.c_str(), false, MQTT_QOS);
+        mqttClient.publish(publishTopic.c_str(), message.c_str(), false, dataQoS);
 
         if (printMessages) {
             Serial.print(F("---- MQTT Sent ---- Topic: "));
@@ -571,7 +570,7 @@ void DashioMQTT::setupLWT() {
 
     String willTopic = dashioDevice->getMQTTTopic(username, will_topic);
     String offlineMessage = dashioDevice->getOfflineMessage();
-    mqttClient.setWill(willTopic.c_str(), offlineMessage.c_str(), false, MQTT_QOS);
+    mqttClient.setWill(willTopic.c_str(), offlineMessage.c_str(), false, dataQoS);
 
     if (printMessages) {
         Serial.print(F("LWT topic: "));
@@ -608,11 +607,13 @@ void DashioMQTT::begin() {
 void DashioMQTT::onConnected() {
     // Subscribe to private MQTT connection
     String subscriberTopic = dashioDevice->getMQTTSubscribeTopic(username);
-    mqttClient.subscribe(subscriberTopic.c_str(), MQTT_QOS); // ... and subscribe
+    mqttClient.subscribe(subscriberTopic.c_str(), controlQoS); // ... and subscribe
 
     // Send MQTT ONLINE and WHO messages to connection (Optional)
     // WHO is only required here if using the Dash server and it must be send to the ANNOUNCE topic
-    sendMessage(dashioDevice->getOnlineMessage());
+    if (enableOnOffline) {
+        sendMessage(dashioDevice->getOnlineMessage());
+    }
     sendMessage(dashioDevice->getWhoMessage(), announce_topic); // Update announce topic with new name
     
     if (dashStore != nullptr) {
@@ -786,7 +787,9 @@ void DashioMQTT::run() {
 }
 
 void DashioMQTT::end() {
-    sendMessage(dashioDevice->getOfflineMessage());
+    if (enableOnOffline) {
+        sendMessage(dashioDevice->getOfflineMessage());
+    }
     mqttClient.disconnect();
 }
 #endif
@@ -798,7 +801,7 @@ bool DashioBLE::printMessages = false;
 MessageData DashioBLE::data(BLE_CONN, INCOMING_BUFFER_SIZE);
 std::mutex DashioBLE::mtx;
 
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(USE_NIMBLE)
 NimBLEServer *DashioBLE::pServer = nullptr;
 NimBLECharacteristic *DashioBLE::pCharacteristic = nullptr;
 NimBLEAdvertising *DashioBLE::pAdvertising = nullptr;

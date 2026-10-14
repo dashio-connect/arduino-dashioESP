@@ -34,6 +34,8 @@
 #ifndef DashioESP_h
 #define DashioESP_h
 
+//#define USE_NIMBLE
+
 #include "Arduino.h"
 
 #include <WiFiClientSecure.h>  // Included in the espressif library
@@ -51,7 +53,7 @@
     #include <esp_wifi.h>
 
     #ifndef CONFIG_IDF_TARGET_ESP32S2
-        #ifdef CONFIG_IDF_TARGET_ESP32
+        #if defined(CONFIG_IDF_TARGET_ESP32) || defined(USE_NIMBLE)
             #include <NimBLEDevice.h>  // ESP32 BLE Arduino library by Neil Kolban. Included in Arduino IDE
         #else
             #include "dashioBLEgap.h"
@@ -68,6 +70,10 @@
 // Create 128 bit UUIDs with a tool such as https://www.uuidgenerator.net/
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+
+// MQTT
+#define DATA_QOS 1
+#define CONTROL_QOS 2
 
 // ---------------------------------------- TCP ----------------------------------------
 
@@ -152,6 +158,9 @@ public:
     bool wifiSetInsecure = true;
     MQTTstate state = notReady;
     bool esp32_mqtt_blocking = true;
+    bool enableOnOffline = true;
+    int dataQoS = DATA_QOS;
+    int controlQoS = CONTROL_QOS;
 
     DashioMQTT(DashioDevice *_dashioDevice, bool _sendRebootAlarm = false, bool _printMessages = false);
     DashioMQTT(DashioDevice *_dashioDevice, bool _sendRebootAlarm, bool _printMessages, int _mqttBufferSize);
@@ -208,7 +217,7 @@ public:
 
 #if defined(ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S2)
 
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(USE_NIMBLE)
 enum BLEauthState {
     BLE_NOT_AUTH,
     BLE_AUTH_REQ_CONN,
@@ -225,7 +234,7 @@ struct BLEclientHolder {
 
 class DashioBLE {
 private:
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(USE_NIMBLE)
     static NimBLEServer *pServer;
     static NimBLECharacteristic *pCharacteristic;
     static NimBLEAdvertising *pAdvertising;
@@ -234,7 +243,7 @@ private:
     void bleNotifyValue(const String& message);
     void processConfig(const String& _dashboardID);
     void sendMessage(const String& message, bool cfgOverride);
-#else {
+#else
     static void messageReceivedCallback(uint16_t conn_handle, char *message, uint16_t length);
     void processConfig(BLEclientHolder *connection, const String& _dashboardID);
     void sendMessage(BLEclientHolder *connection, const String& message, bool cfgOverride);
@@ -247,7 +256,7 @@ private:
     static void checkConnectionTask(void * parameter);
     
 public:
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(USE_NIMBLE)
     static uint32_t passKey;
     static BLEclientHolder *bleClients;
     static uint8_t maxBLEclients;

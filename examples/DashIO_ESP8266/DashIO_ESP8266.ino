@@ -271,6 +271,9 @@ void setup() {
 
     mqtt_con.setCallback(&processIncomingMessage);
     mqtt_con.setup(dashProvision.dashUserName, dashProvision.dashPassword);
+    mqtt_con.enableOnOffline = false;
+    mqtt_con.dataQoS = 1;
+    mqtt_con.controlQoS = 1;
     wifi.attachConnection(&mqtt_con);
     
     wifi.begin(dashProvision.wifiSSID, dashProvision.wifiPassword);

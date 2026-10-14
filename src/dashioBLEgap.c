@@ -5,6 +5,13 @@
 
 #include "dashioBLEgap.h"
 
+// Arduino-ESP32 3.3+ releases the BLE controller's RAM to the heap at boot unless a
+// linked library includes this header. NimBLE then writes into heap memory and
+// nimble_port_init() crashes with a TLSF "block must be free" assert.
+#if __has_include("esp32-hal-alloc-ble-mem.h")
+#include "esp32-hal-alloc-ble-mem.h"
+#endif
+
 static const char *tag = "Dash_BLE_GAP";
 static uint8_t own_addr_type;
 dash_message_received_fn *on_message_received;
