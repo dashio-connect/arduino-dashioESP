@@ -12,6 +12,13 @@
 #include "esp32-hal-alloc-ble-mem.h"
 #endif
 
+// BLE and WiFi share one radio. NimBLE's default (30-60 ms) advertising starves WiFi under
+// coexistence: the station misses beacons and the AP holds its packets for seconds.
+// Units of 0.625 ms. 244 = 152.5 ms, one of Apple's recommended intervals for iOS discovery.
+#ifndef DASH_BLE_ADV_INTERVAL
+#define DASH_BLE_ADV_INTERVAL 244
+#endif
+
 static const char *tag = "Dash_BLE_GAP";
 static uint8_t own_addr_type;
 dash_message_received_fn *on_message_received;
@@ -135,7 +142,7 @@ void printAddress(const void *addr) {
     DASH_LOGI(tag, "Device Address: %02x:%02x:%02x:%02x:%02x:%02x", u8p[5], u8p[4], u8p[3], u8p[2], u8p[1], u8p[0]);
 }
 
-static void ble_advertise(void) {
+void ble_advertise(void) {
     struct ble_gap_adv_params adv_params;
     struct ble_hs_adv_fields fields;
     const char *name;
@@ -173,11 +180,18 @@ static void ble_advertise(void) {
     memset(&adv_params, 0, sizeof adv_params);
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND; // Unidirectional connection
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN; // Generally discoverable
+    adv_params.itvl_min = DASH_BLE_ADV_INTERVAL;
+    adv_params.itvl_max = DASH_BLE_ADV_INTERVAL;
     rc = ble_gap_adv_start(own_addr_type, NULL, BLE_HS_FOREVER, &adv_params, ble_gap_event, NULL);
     if (rc != 0) {
         DASH_LOGE(tag, "error enabling advertisement; rc=%d", rc);
         return;
     }
+}
+
+static void log_conn_params(const char *what, const struct ble_gap_conn_desc *desc) {
+    DASH_LOGI(tag, "%s conn_handle=%d itvl=%d.%02d ms latency=%d timeout=%d ms", what, desc->conn_handle,
+              desc->conn_itvl * 125 / 100, (desc->conn_itvl * 125) % 100, desc->conn_latency, desc->supervision_timeout * 10);
 }
 
 #if MYNEWT_VAL(BLE_POWER_CONTROL)
@@ -213,6 +227,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
         if (event->connect.status == 0) {
             rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
             assert(rc == 0);
+            log_conn_params("central chose", &desc);
 
             if (!setConnectionActive(event->connect.conn_handle)) {
                 DASH_LOGI(tag, "No connections left %d; status=%d", event->connect.conn_handle, event->connect.status);
@@ -244,6 +259,7 @@ static int ble_gap_event(struct ble_gap_event *event, void *arg) {
         DASH_LOGI(tag, "connection updated; status=%d", event->conn_update.status);
         rc = ble_gap_conn_find(event->conn_update.conn_handle, &desc);
         assert(rc == 0);
+        log_conn_params("now", &desc);
 
         return 0;
 

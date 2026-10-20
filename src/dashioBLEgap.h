@@ -53,7 +53,7 @@ void ble_secure(uint32_t _passKey);
 void ble_start_security(uint16_t connHandle);
 struct BLEclientHolder *getConnection(uint16_t conn_handle);
 void ble_stop();
-static void ble_advertise();
+void ble_advertise();
 void bleNotifyValue(uint16_t conn_handle, const char *message, uint16_t length);
 
 #ifdef __cplusplus

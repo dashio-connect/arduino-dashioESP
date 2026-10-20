@@ -331,7 +331,7 @@ void DashioTCP::sendMessage(const String& message) {
 }
 
 void DashioTCP::setupmDNSservice(const String& id) {
-    char charBuf[id.length()];
+    char charBuf[id.length() + 1];
     id.toCharArray(charBuf, id.length() + 1);
     if (!MDNS.begin(charBuf)) {
         if (printMessages) {
@@ -566,7 +566,7 @@ void DashioMQTT::addDashStore(ControlType controlType, String controlID) {
 }
 
 void DashioMQTT::setupLWT() {
-    // Setup MQTT Last Will and Testament message (Optional). Default keep alive time is 10s
+    // Setup MQTT Last Will and Testament message (Optional). Keep alive time is keepAliveS (default 60s)
 
     String willTopic = dashioDevice->getMQTTTopic(username, will_topic);
     String offlineMessage = dashioDevice->getOfflineMessage();
@@ -597,7 +597,7 @@ void DashioMQTT::begin() {
     }
 
     mqttClient.onMessageAdvanced(messageReceivedMQTTCallback);
-    mqttClient.setOptions(10, true, 25000);  // 10s keep alive, clean session, 25s timeout
+    mqttClient.setOptions(keepAliveS, true, mqttTimeoutMs);  // keep alive, clean session, timeout
     mqttClient.begin(mqttHost, mqttPort, wifiClient);
   
     setupLWT(); // Once the deviceID is known
@@ -799,6 +799,29 @@ void DashioMQTT::end() {
 
 bool DashioBLE::printMessages = false;
 MessageData DashioBLE::data(BLE_CONN, INCOMING_BUFFER_SIZE);
+MessageData DashioBLE::rxMessage(BLE_CONN);
+
+// data is written by the BLE host task and checkConnectionTask (under mtx) and read by run() on the
+// loop task. Copy the parsed message out under the lock before clearing messageReceived, otherwise
+// checkBuffer() can parse the next message into data's Strings while run() is still using them.
+bool DashioBLE::takeMessage() {
+    std::lock_guard<std::mutex> lck(mtx);
+    if (!data.messageReceived) {
+        return false;
+    }
+    rxMessage.connectionType = data.connectionType;
+    rxMessage.checkPrefix = data.checkPrefix;
+    rxMessage.deviceID = data.deviceID;
+    rxMessage.control = data.control;
+    rxMessage.idStr = data.idStr;
+    rxMessage.payloadStr = data.payloadStr;
+    rxMessage.payloadStr2 = data.payloadStr2;
+    rxMessage.connectionHandle = data.connectionHandle;
+    rxMessage.messageReceived = true;
+    data.messageReceived = false;
+    return true;
+}
+
 std::mutex DashioBLE::mtx;
 
 #if defined(CONFIG_IDF_TARGET_ESP32) || defined(USE_NIMBLE)
@@ -996,23 +1019,21 @@ void DashioBLE::run() {
         }
     }
     
-    if (data.messageReceived) {
-        data.messageReceived = false;
-        
+    if (takeMessage()) {
         if (printMessages) {
-            Serial.println(data.getReceivedMessageForPrint(dashioDevice->getControlTypeStr(data.control)));
+            Serial.println(rxMessage.getReceivedMessageForPrint(dashioDevice->getControlTypeStr(rxMessage.control)));
         }
         
         bool startAuth = false;
         
-        switch (data.control) {
+        switch (rxMessage.control) {
             case who:
                 sendMessage(dashioDevice->getWhoMessage());
                 break;
             case connect:
                 if (secureBLE && (bleClients != nullptr)) {
                     for (int i = 0; i < maxBLEclients; i++) {
-                        if (bleClients[i].connectionHandle == data.connectionHandle) {
+                        if (bleClients[i].connectionHandle == rxMessage.connectionHandle) {
                             if (bleClients[i].authState == BLE_NOT_AUTH) {
                                 startAuth = true;
                             }
@@ -1020,23 +1041,23 @@ void DashioBLE::run() {
                     }
                 }
                 if (startAuth) {
-                    NimBLEDevice::startSecurity(data.connectionHandle);
+                    NimBLEDevice::startSecurity(rxMessage.connectionHandle);
                 } else {
                     sendMessage(dashioDevice->getConnectMessage());
                 }
                 break;
             case config:
                 if (dashioDevice->configC64Str != nullptr) {
-                    processConfig(data.idStr);
+                    processConfig(rxMessage.idStr);
                 } else {
                     if (processBLEmessageCallback != nullptr) {
-                        processBLEmessageCallback(&data);
+                        processBLEmessageCallback(&rxMessage);
                     }
                 }
                 break;
             default:
                 if (processBLEmessageCallback != nullptr) {
-                    processBLEmessageCallback(&data);
+                    processBLEmessageCallback(&rxMessage);
                 }
                 break;
         }
@@ -1060,9 +1081,11 @@ void DashioBLE::checkConnectionTask(void * parameter) {
                 }
             }
         }
-        
-        std::lock_guard<std::mutex> lck(mtx);
-        data.checkBuffer(); // Not really necessary, but just in case.
+
+        {
+            std::lock_guard<std::mutex> lck(mtx); // Scoped so the lock is released before the delay
+            data.checkBuffer(); // Not really necessary, but just in case.
+        }
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }
@@ -1240,7 +1263,7 @@ void DashioBLE::sendMessage(BLEclientHolder *connection, const String& message, 
         }
     }
 
-    if (printMessages) {
+    if (printMessages && (connection != NULL)) { // NULL if the client disconnected before its message was processed
         ESP_LOGI(DTAG, "---- BLE Sent ---- ConnHndle: %d", connection->connectionHandle);
         ESP_LOGI(DTAG, "%s\n", message.c_str());
     }
@@ -1258,6 +1281,9 @@ void DashioBLE::sendMessage(const String& message) {
 }
 
 void DashioBLE::processConfig(BLEclientHolder *connection, const String& _dashboardID) {
+    if (connection == NULL) { // Client disconnected before its CONFIG request was processed
+        return;
+    }
     isConfig = true;
 
     sendMessage(connection, dashioDevice->getC64ConfigBaseMessage(_dashboardID), true);
@@ -1294,16 +1320,14 @@ void DashioBLE::run() {
         }
     }
 
-    if (data.messageReceived) {
-        data.messageReceived = false;
-
-        struct BLEclientHolder *connection = getConnection(data.connectionHandle);
+    if (takeMessage()) {
+        struct BLEclientHolder *connection = getConnection(rxMessage.connectionHandle);
         
         if (printMessages) {
-            Serial.println(data.getReceivedMessageForPrint(dashioDevice->getControlTypeStr(data.control)));
+            Serial.println(rxMessage.getReceivedMessageForPrint(dashioDevice->getControlTypeStr(rxMessage.control)));
         }
         
-        switch (data.control) {
+        switch (rxMessage.control) {
             case who:
                 sendMessage(connection, dashioDevice->getWhoMessage(), false);
                 break;
@@ -1311,7 +1335,7 @@ void DashioBLE::run() {
                     bool startAuth = false;
                     if (secureBLE && (bleClients != nullptr)) {
                         for (int i = 0; i < maxBLEclients; i++) {
-                            if (bleClients[i].connectionHandle == data.connectionHandle) {
+                            if (bleClients[i].connectionHandle == rxMessage.connectionHandle) {
                                 if (bleClients[i].authState == BLE_NOT_AUTH) {
                                     startAuth = true;
                                 }
@@ -1319,7 +1343,7 @@ void DashioBLE::run() {
                         }
                     }
                     if (startAuth) {
-                        ble_start_security(data.connectionHandle);
+                        ble_start_security(rxMessage.connectionHandle);
                     } else {
                         sendMessage(connection, dashioDevice->getConnectMessage(), false);
                     }
@@ -1327,16 +1351,16 @@ void DashioBLE::run() {
                 break;
             case config:
                 if (dashioDevice->configC64Str != nullptr) {
-                    processConfig(connection, data.idStr);
+                    processConfig(connection, rxMessage.idStr);
                 } else {
                     if (processBLEmessageCallback != nullptr) {
-                        processBLEmessageCallback(&data);
+                        processBLEmessageCallback(&rxMessage);
                     }
                 }
                 break;
             default:
                 if (processBLEmessageCallback != nullptr) {
-                    processBLEmessageCallback(&data);
+                    processBLEmessageCallback(&rxMessage);
                 }
                 break;
         }
@@ -1345,8 +1369,10 @@ void DashioBLE::run() {
 
 void DashioBLE::checkConnectionTask(void * parameter) {
     for(;;) {
-        std::lock_guard<std::mutex> lck(mtx);
-        data.checkBuffer(); // Not really necessary, but just in case.
+        {
+            std::lock_guard<std::mutex> lck(mtx); // Scoped so the lock is released before the delay
+            data.checkBuffer(); // Not really necessary, but just in case.
+        }
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }

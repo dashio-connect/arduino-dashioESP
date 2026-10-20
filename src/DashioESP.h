@@ -74,6 +74,8 @@
 // MQTT
 #define DATA_QOS 1
 #define CONTROL_QOS 2
+#define MQTT_KEEP_ALIVE_S 60   // Broker drops the connection after 1.5 x this with no packets, so it must outlast the longest blocking publish (up to MQTT_TIMEOUT_MS)
+#define MQTT_TIMEOUT_MS 25000  // Max wait for PUBACK/CONNACK. A timeout closes the connection, so don't set this below typical broker ack latency
 
 // ---------------------------------------- TCP ----------------------------------------
 
@@ -161,6 +163,8 @@ public:
     bool enableOnOffline = true;
     int dataQoS = DATA_QOS;
     int controlQoS = CONTROL_QOS;
+    int keepAliveS = MQTT_KEEP_ALIVE_S; // Set before WiFi connects (applied in begin())
+    int mqttTimeoutMs = MQTT_TIMEOUT_MS;
 
     DashioMQTT(DashioDevice *_dashioDevice, bool _sendRebootAlarm = false, bool _printMessages = false);
     DashioMQTT(DashioDevice *_dashioDevice, bool _sendRebootAlarm, bool _printMessages, int _mqttBufferSize);
@@ -254,7 +258,10 @@ private:
 
     void initialiseClientHolders();
     static void checkConnectionTask(void * parameter);
-    
+
+    static MessageData rxMessage; // run()'s copy of the last received message, so the BLE task can parse the next one into data
+    bool takeMessage();
+
 public:
 #if defined(CONFIG_IDF_TARGET_ESP32) || defined(USE_NIMBLE)
     static uint32_t passKey;
