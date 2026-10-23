@@ -45,7 +45,7 @@ DashProvision dashProvision(&dashDevice);
 
 // dash comms connections
 DashWiFi wifi;
-DashTCP  tcp_con(&dashDevice, true);
+DashTCP  tcp_con(&dashDevice, true, 5650, 3); // Up to 3 TCP clients (port 5650)
 DashMQTT mqtt_con(&dashDevice, true, true);
 
 // Create controls

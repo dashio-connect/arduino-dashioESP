@@ -48,6 +48,7 @@
 #endif
 
 #ifdef ESP32
+    #include <deque>
     #include <mutex>
     #include <WiFi.h>
     #include <esp_wifi.h>
@@ -139,13 +140,33 @@ private:
     void checkAndSendMQTTbuffer();
     void publishMessage(const String& message, MQTTTopicType topic);
     void processConfig(const String& _dashboardID);
+    void handleMessage(MessageData *message);
 
     static void messageReceivedMQTTCallback(MQTTClient *client, char *topic, char *payload, int payload_length);
     void onConnected();
     void hostConnect();
     void setupLWT();
+    bool taskMode();
+    void notifyStatus(StatusCode statusCode);
+    void doBegin();
+    void doEnd();
 #ifdef ESP32
-    static void checkConnectionTask(void * parameter);
+    // ESP32 task mode (esp32_mqtt_blocking == false): only mqttTask touches mqttClient, so loop() never
+    // blocks on the broker. Other tasks hand messages over in mqttSendBuffer / pendingTopicBuffer
+    // (under mtx); as before, a message is dropped if it can't be published.
+    static std::mutex mtx;
+    static MessageData rxMessage;           // run()'s copy of the last received message
+    TaskHandle_t mqttTaskHandle = nullptr;
+    String pendingTopicBuffer[will_topic];  // Non-data topics waiting for the task (index = MQTTTopicType)
+    std::deque<StatusCode> pendingStatus;   // Status callbacks raised in the task, delivered from run()
+    volatile bool beginRequested = false;
+    volatile bool endRequested = false;
+
+    static void mqttTask(void * parameter);
+    void service();
+    void sendPending();
+    bool takeMessage();
+    void dispatchStatus();
 #endif
 
     DashStore *dashStore = nullptr;
@@ -159,7 +180,7 @@ public:
     uint16_t mqttPort = DASH_PORT;
     bool wifiSetInsecure = true;
     MQTTstate state = notReady;
-    bool esp32_mqtt_blocking = true;
+    bool esp32_mqtt_blocking = false;   // ESP32: false = MQTT runs in its own task so it never blocks loop(). Set before WiFi connects
     bool enableOnOffline = true;
     int dataQoS = DATA_QOS;
     int controlQoS = CONTROL_QOS;

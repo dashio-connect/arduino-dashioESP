@@ -450,13 +450,25 @@ void DashioTCP::run() {
 
 // ---------------------------------------- MQTT ---------------------------------------
 
+#ifdef ESP32
+std::mutex DashioMQTT::mtx;
+MessageData DashioMQTT::rxMessage(MQTT_CONN);
+#define MQTT_LOCK std::lock_guard<std::mutex> mqttLock(mtx)
+#else
+#define MQTT_LOCK
+#endif
+
+// The MQTT client buffer must hold the whole PUBLISH packet: header, topic, packet ID and payload.
+// A larger publish fails, and a failed publish closes the connection.
+const unsigned int MQTT_MAX_PAYLOAD = MQTT_CLIENT_BUFFER_SIZE - 128;
+
 DashioMQTT::DashioMQTT(DashioDevice *_dashioDevice, bool _sendRebootAlarm, bool _printMessages) : mqttClient(MQTT_CLIENT_BUFFER_SIZE) {
     dashioDevice = _dashioDevice;
     sendRebootAlarm  = _sendRebootAlarm;
     printMessages = _printMessages;
 
 #ifdef ESP32
-    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckMQTTConnTask", 10000, this, 0, NULL, 0);
+    xTaskCreatePinnedToCore(this->mqttTask, "MQTTTask", 12288, this, 1, &mqttTaskHandle, 0); // TLS handshakes need a large stack
 #endif
 }
 
@@ -465,19 +477,40 @@ DashioMQTT::DashioMQTT(DashioDevice *_dashioDevice, bool _sendRebootAlarm, bool 
     sendRebootAlarm  = _sendRebootAlarm;
     printMessages = _printMessages;
     if (_mqttBufferSize >= MQTT_SEND_BUFFER_MIN) {
-        mqttBuffersize = _mqttBufferSize;
-        mqttSendBuffer.reserve(_mqttBufferSize);
+        mqttBuffersize = ((unsigned int)_mqttBufferSize < MQTT_MAX_PAYLOAD) ? _mqttBufferSize : MQTT_MAX_PAYLOAD;
+        mqttSendBuffer.reserve(mqttBuffersize);
     }
 
 #ifdef ESP32
-    xTaskCreatePinnedToCore(this->checkConnectionTask, "CheckMQTTConnTask", 10000, this, 0, NULL, 0);
+    xTaskCreatePinnedToCore(this->mqttTask, "MQTTTask", 12288, this, 1, &mqttTaskHandle, 0); // TLS handshakes need a large stack
 #endif
 }
 
 MessageData DashioMQTT::data(MQTT_CONN, INCOMING_BUFFER_SIZE);
 
+bool DashioMQTT::taskMode() {
+#ifdef ESP32
+    return !esp32_mqtt_blocking;
+#else
+    return false;
+#endif
+}
+
 void DashioMQTT::messageReceivedMQTTCallback(MQTTClient *client, char *topic, char *payload, int payload_length) {
+    MQTT_LOCK;
     data.processMessage(String(payload)); // The message components are stored within the connection where the messageReceived flag is set
+}
+
+// Status callbacks run the sketch's code, so in task mode deliver them from run() on the loop task
+void DashioMQTT::notifyStatus(StatusCode statusCode) {
+#ifdef ESP32
+    if (taskMode()) {
+        MQTT_LOCK;
+        pendingStatus.push_back(statusCode);
+        return;
+    }
+#endif
+    dashioDevice->onStatusCallback(statusCode);
 }
 
 void DashioMQTT::checkAndSendMQTTbuffer() {
@@ -507,6 +540,25 @@ void DashioMQTT::publishMessage(const String& message, MQTTTopicType topic) {
 }
 
 void DashioMQTT::sendMessage(const String& message, MQTTTopicType topic) {
+#ifdef ESP32
+    if (taskMode()) {
+        if ((topic != data_topic) && (xTaskGetCurrentTaskHandle() == mqttTaskHandle)) {
+            publishMessage(message, topic); // Already in the MQTT task (e.g. onConnected), so publish directly
+            return;
+        }
+        if (topic >= will_topic) {
+            return;
+        }
+        // Hand over to the MQTT task. Like the original batching buffer, a message that doesn't fit is dropped.
+        MQTT_LOCK;
+        String& buffer = (topic == data_topic) ? mqttSendBuffer : pendingTopicBuffer[topic];
+        unsigned int maxLen = ((topic == data_topic) && (mqttBuffersize > 0)) ? mqttBuffersize : MQTT_MAX_PAYLOAD;
+        if (buffer.length() + message.length() <= maxLen) {
+            buffer += message;
+        }
+        return;
+    }
+#endif
     if (mqttBuffersize >= MQTT_SEND_BUFFER_MIN && topic == data_topic) {
         if (message.length() < (mqttBuffersize - mqttSendBuffer.length())) {
             mqttSendBuffer += message;
@@ -592,6 +644,16 @@ void DashioMQTT::setup(char *_username, char *_password) {
 }
 
 void DashioMQTT::begin() {
+#ifdef ESP32
+    if (taskMode()) {
+        beginRequested = true; // The MQTT task owns mqttClient, so it does the work
+        return;
+    }
+#endif
+    doBegin();
+}
+
+void DashioMQTT::doBegin() {
     if (wifiSetInsecure) {
         wifiClient.setInsecure();
     }
@@ -674,7 +736,7 @@ void DashioMQTT::onConnected() {
         }
     }
     
-    dashioDevice->onStatusCallback(mqttConnected);
+    notifyStatus(mqttConnected);
 }
 
 void DashioMQTT::hostConnect() {
@@ -713,7 +775,7 @@ void DashioMQTT::checkConnection() {
             if (mqttConnectCount >= MQTT_RETRY_S) {
                 mqttConnectCount = 0;
 
-                dashioDevice->onStatusCallback(mqttDisconnected);
+                notifyStatus(mqttDisconnected);
             } else {
                 mqttConnectCount++;
             }
@@ -724,20 +786,150 @@ void DashioMQTT::checkConnection() {
 }
     
 #ifdef ESP32
-void DashioMQTT::checkConnectionTask(void * parameter) {
+// Task mode: the only place mqttClient is used, so slow publishes and reconnects never block loop()
+void DashioMQTT::mqttTask(void * parameter) {
     DashioMQTT *mqttConn = (DashioMQTT *) parameter;
+    unsigned long lastCheck = 0;
     for(;;) {
-        if (mqttConn != nullptr) {
-            if (!mqttConn->esp32_mqtt_blocking) {
+        if ((mqttConn != nullptr) && mqttConn->taskMode()) {
+            mqttConn->service();
+            if (millis() - lastCheck >= 1000) { // Once a second, as DashioWiFi::run() does when blocking
+                lastCheck = millis();
                 mqttConn->checkConnection();
             }
         }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+void DashioMQTT::service() {
+    if (beginRequested) {
+        beginRequested = false;
+        doBegin();
+    }
+    if (endRequested) {
+        endRequested = false;
+        doEnd();
+    }
+
+    if (mqttClient.connected()) {
+        mqttClient.loop();
+
+        if (state == serverConnected) {
+            onConnected();
+            state = subscribed;
+        }
+        sendPending();
+    } else {
+        if ((state == serverConnected) or (state == subscribed)) {
+            state = disconnected;
+        }
+    }
+}
+
+// Publish whatever other tasks have handed over. Data is batched no more often than MQTT_SEND_WAIT_MS
+// when a batching buffer size was given, as in checkAndSendMQTTbuffer().
+void DashioMQTT::sendPending() {
+    for (int t = 0; t < will_topic; t++) {
+        MQTTTopicType topic = (MQTTTopicType)t;
+        String message((char *)0);
+        {
+            MQTT_LOCK;
+            String& buffer = (topic == data_topic) ? mqttSendBuffer : pendingTopicBuffer[t];
+            if (buffer.length() == 0) {
+                continue;
+            }
+            if ((topic == data_topic) && (mqttBuffersize > 0) && (millis() - lastSentMessageTime < (unsigned long)MQTT_SEND_WAIT_MS)) {
+                continue;
+            }
+            message = buffer;
+            buffer.clear();
+        }
+        if (topic == data_topic) {
+            lastSentMessageTime = millis();
+        }
+        publishMessage(message, topic);
+    }
+}
+
+// Copy the parsed message out under the lock so the client callback can parse the next one into data
+bool DashioMQTT::takeMessage() {
+    MQTT_LOCK;
+    if (!data.messageReceived) {
+        data.checkBuffer();
+    }
+    if (!data.messageReceived) {
+        return false;
+    }
+    rxMessage.connectionType = data.connectionType;
+    rxMessage.checkPrefix = data.checkPrefix;
+    rxMessage.deviceID = data.deviceID;
+    rxMessage.control = data.control;
+    rxMessage.idStr = data.idStr;
+    rxMessage.payloadStr = data.payloadStr;
+    rxMessage.payloadStr2 = data.payloadStr2;
+    rxMessage.connectionHandle = data.connectionHandle;
+    rxMessage.messageReceived = true;
+    data.messageReceived = false;
+    data.checkBuffer(); // Start on the next buffered message
+    return true;
+}
+
+void DashioMQTT::dispatchStatus() {
+    for (;;) {
+        StatusCode statusCode;
+        {
+            MQTT_LOCK;
+            if (pendingStatus.empty()) {
+                return;
+            }
+            statusCode = pendingStatus.front();
+            pendingStatus.pop_front();
+        }
+        dashioDevice->onStatusCallback(statusCode);
     }
 }
 #endif
 
+void DashioMQTT::handleMessage(MessageData *message) {
+    if (printMessages) {
+        Serial.println(message->getReceivedMessageForPrint(dashioDevice->getControlTypeStr(message->control)));
+    }
+
+    switch (message->control) {
+        case who:
+            sendMessage(dashioDevice->getWhoMessage());
+            break;
+        case connect:
+            sendMessage(dashioDevice->getConnectMessage());
+            break;
+        case config:
+            if (dashioDevice->configC64Str != nullptr) {
+                processConfig(message->idStr);
+            } else {
+                if (processMQTTmessageCallback != nullptr) {
+                    processMQTTmessageCallback(message);
+                }
+            }
+            break;
+        default:
+            if (processMQTTmessageCallback != nullptr) {
+                processMQTTmessageCallback(message);
+            }
+            break;
+    }
+}
+
 void DashioMQTT::run() {
+#ifdef ESP32
+    if (taskMode()) { // The MQTT task does the network work; here only handle incoming messages and status
+        dispatchStatus();
+        if (takeMessage()) {
+            handleMessage(&rxMessage);
+        }
+        return;
+    }
+#endif
     if (mqttClient.connected()) {
         mqttClient.loop();
 
@@ -748,33 +940,7 @@ void DashioMQTT::run() {
 
         if (data.messageReceived) {
             data.messageReceived = false;
-
-            if (printMessages) {
-                Serial.println(data.getReceivedMessageForPrint(dashioDevice->getControlTypeStr(data.control)));
-            }
-
-            switch (data.control) {
-                case who:
-                    sendMessage(dashioDevice->getWhoMessage());
-                    break;
-                case connect:
-                    sendMessage(dashioDevice->getConnectMessage());
-                    break;
-                case config:
-                    if (dashioDevice->configC64Str != nullptr) {
-                        processConfig(data.idStr);
-                    } else {
-                        if (processMQTTmessageCallback != nullptr) {
-                            processMQTTmessageCallback(&data);
-                        }
-                    }
-                    break;
-                default:
-                    if (processMQTTmessageCallback != nullptr) {
-                        processMQTTmessageCallback(&data);
-                    }
-                    break;
-            }
+            handleMessage(&data);
         }
 
         data.checkBuffer();
@@ -787,8 +953,18 @@ void DashioMQTT::run() {
 }
 
 void DashioMQTT::end() {
+#ifdef ESP32
+    if (taskMode()) {
+        endRequested = true; // The MQTT task owns mqttClient, so it does the work
+        return;
+    }
+#endif
+    doEnd();
+}
+
+void DashioMQTT::doEnd() {
     if (enableOnOffline) {
-        sendMessage(dashioDevice->getOfflineMessage());
+        publishMessage(dashioDevice->getOfflineMessage(), data_topic); // Directly, as the connection is about to close
     }
     mqttClient.disconnect();
 }
