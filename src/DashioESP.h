@@ -216,6 +216,7 @@ private:
     void (*wifiConnectCallback)(void) = nullptr; // Deprecated
     DashioTCP *tcpConnection = nullptr;
     DashioMQTT *mqttConnection = nullptr;
+    void applyPowerSave();
 
 #ifdef ESP32
     static void wifiOneSecondTask(void *parameter);
@@ -229,7 +230,11 @@ private:
 public:
     DashioWiFi(DashioDevice *_dashioDevice = nullptr);
     uint16_t connectTimeoutS = 300; // 5 mins
-    
+    // ESP32 only. false = WiFi power save (modem sleep) off: the radio stays awake, so the router never holds back
+    // packets for the ESP32, which cuts MQTT/TCP delays when BLE is also in use. It costs power: set true for battery
+    // devices. Set before begin(); a change later takes effect the next time the WiFi connects.
+    bool powerSave = false;
+
     void attachConnection(DashioTCP *_tcpConnection);
     void attachConnection(DashioMQTT *_mqttConnection);
     void detachTcp();

@@ -95,6 +95,12 @@ void DashioWiFi::setOnConnectCallback(void (*connectCallback)(void)) {
     wifiConnectCallback = connectCallback;
 }
 
+void DashioWiFi::applyPowerSave() {
+#ifdef ESP32
+    WiFi.setSleep(powerSave); // true = minimum modem sleep (the ESP32 default), false = none
+#endif
+}
+
 void DashioWiFi::begin(char *ssid, char *password) {
     // Below is required to get WiFi to connect reliably on ESP32
     WiFi.disconnect(true);
@@ -102,6 +108,7 @@ void DashioWiFi::begin(char *ssid, char *password) {
     WiFi.mode(WIFI_STA);
     delay(1000);
     WiFi.begin(ssid, password);
+    applyPowerSave();
     wifiConnectCount = 1;
 }
 
@@ -146,6 +153,7 @@ void DashioWiFi::run() {
             // WiFi OK
             if (wifiConnectCount > 0) {
                 wifiConnectCount = 0; // So that we only execute the following once after WiFI connection
+                applyPowerSave();
                 Serial.print("Connected with IP: ");
                 Serial.println(WiFi.localIP());
 

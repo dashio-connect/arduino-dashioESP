@@ -521,6 +521,8 @@ wifi.begin(WIFI_SSID, WIFI_PASSWORD);
 
 It's relativelty easy to combine the code for two or three connections in one ESP32 IoT device where each connection calls a common processIncomingMessage callback. The latest Espressif Arduino core libraries have significant performance improvements that now allow BLE and WiFi with TCP and MQTT connections to run simultaneously.
 
+BLE and WiFi share one radio. With the ESP32's normal WiFi power save, the router holds messages back while the radio is asleep or busy with BLE, which can delay incoming MQTT and TCP messages by several seconds. For this reason the **DashioESP** library turns WiFi power save off by default. If your IoT device is battery powered and you would rather save power, set <code>wifi.powerSave = true;</code> before <code>wifi.begin()</code>. The setting is applied each time the WiFi connects.
+
 Note that the wifi mac address is not identical to the BLE mac addresss. Therefore, if you are combining connections, it is best to stick with the wifi mac address for your device_ID.
 
 When combining connections, it is useful to create a generic ```sendMessage``` function to reply to an incoming message for a specific connection type. This prevents sending unnecessary reply messages to all connections:

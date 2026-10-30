@@ -36,6 +36,7 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 - ESP32 MQTT now runs in its own task so it no longer blocks *loop()*. Set *esp32_mqtt_blocking = true* for the previous behaviour.
 - Added *DashioMQTT::incomingBufferSize* to set the incoming MQTT buffer size (default and minimum 512 bytes). Requires **Dashio** 1.2.5 or later.
+- ESP32 WiFi power save is now off by default, which removes multi-second MQTT and TCP delays when BLE is also used. This uses more power. Set *wifi.powerSave = true* before *wifi.begin()* to restore power saving.
 - MQTT keep alive increased to 60 s, adjustable with *keepAliveS* and *mqttTimeoutMs*.
 - Slower BLE advertising interval (152.5 ms) to improve WiFi performance when BLE and WiFi are used together.
 - Fix crash when a BLE client disconnects before its message is processed.
