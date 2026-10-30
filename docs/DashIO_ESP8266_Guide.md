@@ -1,6 +1,6 @@
 <h1 id="toc_0">Dash IoT Guide (ESP8266)</h1>
 
-**14 July 2026**
+**30 October 2026**
 
 This guide demonstrates how to make TCP and MQTT connections to an ESP8266 IoT device using the Arduino or PlatformIO IDE and the **Dash** Adruino library. It also shows how to load user controls (widgets) into your mobile device to monitor and control an IoT device.
 
@@ -394,6 +394,25 @@ For the next step, you will need to setup your **Dash** app with Dial and Knob c
 <p>For MQTT connections operating through the <strong>dash</strong> MQTT broker, a service is available for sending <strong>Alarms</strong> (push notifications) to your mobile device. These are handy for sending messages or alarms to the user when they are not currently using the <strong>Dash</strong> app. To send an alarm, simply call the MQTT connection&#39;s <code>sendMessage</code> method with two attrbutes; the first being any message String and the second having <strong>alarm_topic</strong> specified.</p>
 
 <div><pre><code class="language-none">mqtt_con.sendMessage("message", alarm_topic);</code></pre></div>
+
+<h3 id="toc_mqtt_buffer">MQTT Incoming Message Buffer</h3>
+
+<p>Incoming MQTT messages are held in a buffer until they are processed. It defaults to 512 bytes, which is enough for normal control messages. If your IoT device receives large messages, or several messages that arrive close together, you can make the buffer bigger by setting <code>DashMQTT::incomingBufferSize</code> in <code>setup()</code>, before the WiFi connects:</p>
+
+<div><pre><code class="language-none">DashMQTT::incomingBufferSize = 2048;
+mqtt_con.setup(MQTT_USER, MQTT_PASSWORD);
+mqtt_con.setCallback(&amp;processIncomingMessage);
+wifi.attachConnection(&amp;mqtt_con);
+wifi.begin(WIFI_SSID, WIFI_PASSWORD);
+</code></pre></div>
+
+<p>Things to know:</p>
+
+- You don't call the MQTT connection's <code>begin()</code> yourself. The <code>wifi</code> object calls it each time the WiFi connects, and this is when the new size is applied. Set <code>incomingBufferSize</code> before then. A change made later takes effect the next time the WiFi reconnects, and any messages waiting in the buffer at that moment are discarded.
+- The size can't be set below 512 bytes. A smaller value is raised to 512.
+- <code>incomingBufferSize</code> is shared by all MQTT connections.
+- The buffer is allocated from the heap. If there isn't enough memory, the previous buffer stays in use.
+- The size of the MQTT client's own packet buffer is fixed at 2048 bytes, so a single incoming message larger than that can't be received, whatever the incoming buffer size.
 
 <h2 id="toc_10">Combining TCP and MQTT</h2>
 
