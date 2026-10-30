@@ -980,8 +980,13 @@ MessageData DashioBLE::rxMessage(BLE_CONN);
 // data is written by the BLE host task and checkConnectionTask (under mtx) and read by run() on the
 // loop task. Copy the parsed message out under the lock before clearing messageReceived, otherwise
 // checkBuffer() can parse the next message into data's Strings while run() is still using them.
+// Like DashioMQTT::takeMessage(), the buffer is drained here, so loop() gets each buffered message straight away
+// instead of waiting for the next BLE write or the 100 ms checkConnectionTask (messages backed up and were lost).
 bool DashioBLE::takeMessage() {
     std::lock_guard<std::mutex> lck(mtx);
+    if (!data.messageReceived) {
+        data.checkBuffer();
+    }
     if (!data.messageReceived) {
         return false;
     }
@@ -995,6 +1000,7 @@ bool DashioBLE::takeMessage() {
     rxMessage.connectionHandle = data.connectionHandle;
     rxMessage.messageReceived = true;
     data.messageReceived = false;
+    data.checkBuffer(); // Start on the next buffered message
     return true;
 }
 
