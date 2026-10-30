@@ -125,6 +125,11 @@ enum MQTTstate {
 };
 
 class DashioMQTT {
+public:
+    static const int MIN_INCOMING_BUFFER_SIZE = 512;
+    // Size of the incoming message buffer. Set before WiFi connects (DashWiFi calls begin() on each connect);
+    // values below MIN_INCOMING_BUFFER_SIZE are raised to it
+    static int incomingBufferSize;
 private:
     bool reboot = true;
     static MessageData data;

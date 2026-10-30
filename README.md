@@ -32,6 +32,11 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 ## Release Notes
 
+### 1.3.3 (30 October 2026)
+
+- Added *DashioMQTT::incomingBufferSize* to set the size of the incoming MQTT message buffer (default and minimum 512 bytes). Set it before the WiFi connects. Requires **Dashio** 1.2.5 or later.
+- BLE messages are now taken from the buffer as soon as they are received, so back-to-back messages are no longer lost.
+
 ### 1.3.2 (14 October 2026)
 
 - Fix BLE init crash

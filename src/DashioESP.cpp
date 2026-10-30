@@ -33,7 +33,7 @@
     #define C64_MAX_LENGHT 500
 #endif
 
-const int INCOMING_BUFFER_SIZE = 512;
+const int INCOMING_BUFFER_SIZE = DashioMQTT::MIN_INCOMING_BUFFER_SIZE; // BLE's fixed size and the minimum for MQTT
 
 // MQTT
 const int MQTT_RETRY_S = 10; // Retry after 10 seconds
@@ -486,7 +486,8 @@ DashioMQTT::DashioMQTT(DashioDevice *_dashioDevice, bool _sendRebootAlarm, bool 
 #endif
 }
 
-MessageData DashioMQTT::data(MQTT_CONN, INCOMING_BUFFER_SIZE);
+int DashioMQTT::incomingBufferSize = MIN_INCOMING_BUFFER_SIZE;
+MessageData DashioMQTT::data(MQTT_CONN, MIN_INCOMING_BUFFER_SIZE);
 
 bool DashioMQTT::taskMode() {
 #ifdef ESP32
@@ -654,6 +655,13 @@ void DashioMQTT::begin() {
 }
 
 void DashioMQTT::doBegin() {
+    if (incomingBufferSize < MIN_INCOMING_BUFFER_SIZE) {
+        incomingBufferSize = MIN_INCOMING_BUFFER_SIZE;
+    }
+    {
+        MQTT_LOCK;
+        data.setBufferSize(incomingBufferSize); // If the allocation fails the previous buffer stays in use
+    }
     if (wifiSetInsecure) {
         wifiClient.setInsecure();
     }
