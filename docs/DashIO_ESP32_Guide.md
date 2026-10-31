@@ -1,6 +1,6 @@
 <h1 id="toc_0">Dash IoT Guide (ESP32)</h1>
 
-**30 October 2026**
+**31 October 2026**
 
 This guide demonstrates how to make BLE, TCP and MQTT connections to an ESP32 IoT device using the Arduino or PlatformIO IDE and the **DashIO** Adruino library. It also shows how to load user controls (widgets) into your mobile device to monitor and control an IoT device.
 
@@ -516,6 +516,41 @@ wifi.begin(WIFI_SSID, WIFI_PASSWORD);
 - <code>incomingBufferSize</code> is shared by all MQTT connections and only affects MQTT. The BLE buffer stays at 512 bytes.
 - The buffer is allocated from the heap. If there isn't enough memory, the previous buffer stays in use.
 - The size of the MQTT client's own packet buffer is fixed at 2048 bytes, so a single incoming message larger than that can't be received, whatever the incoming buffer size.
+
+<h3 id="toc_mqtt_clock">Setting the Clock from the Dash Server</h3>
+
+<p>Event Logs and Time Graphs need accurate UTC time stamps. As well as using NTP (see the <strong>DashIO_ESP32</strong> example), a device with an MQTT connection can get the time from the <strong>dash</strong> server. After the MQTT connection is made, send a clock request to the server in a status callback. The server replies with a clock message holding the Unix time (whole seconds since 1 January 1970, UTC), which arrives in the incoming message callback as <code>dashClock</code>:</p>
+
+<div><pre><code class="language-none">#include &lt;sys/time.h&gt;
+
+void processDateTime(MessageData *messageData) {
+    time_t epoch = messageData-&gt;payloadStr.toInt(); // Unix time in seconds, UTC
+    if (epoch &gt; 0) {
+        struct timeval tv = {}; // Zero initialised, so tv_usec is 0
+        tv.tv_sec = epoch;
+        settimeofday(&amp;tv, NULL);
+    }
+}
+
+void processIncomingMessage(MessageData *messageData) {
+    switch (messageData-&gt;control) {
+    case dashClock:
+        processDateTime(messageData);
+        break;
+    // other controls...
+    }
+}
+
+void onStatusCallback(StatusCode statusCode) {
+    if (statusCode == mqttConnected) {
+        mqtt_con.sendMessage(dashDevice.getClockMessage(), announce_topic);
+    }
+}
+</code></pre></div>
+
+<p>Register the status callback in <code>setup()</code> with <code>dashDevice.setStatusCallback(&amp;onStatusCallback);</code>. Once the clock is set, <code>time()</code> and <code>getLocalTime()</code> return the correct UTC time, as used by <code>getUTCtime()</code> in the <strong>DashIO_ESP32</strong> example. The ESP32 forgets the time when it resets, so the clock is requested each time the MQTT connection is made.</p>
+
+<p><strong>Always initialise the <code>struct timeval</code>.</strong> The microseconds field <code>tv_usec</code> is added to the clock without any checking, so an uninitialised structure can leave the clock wrong by many minutes.</p>
 
 <h3 id="toc_11">Combining BLE, TCP and MQTT</h3>
 

@@ -1,6 +1,6 @@
 <h1 id="toc_0">Dash IoT Guide (ESP8266)</h1>
 
-**30 October 2026**
+**31 October 2026**
 
 This guide demonstrates how to make TCP and MQTT connections to an ESP8266 IoT device using the Arduino or PlatformIO IDE and the **Dash** Adruino library. It also shows how to load user controls (widgets) into your mobile device to monitor and control an IoT device.
 
@@ -413,6 +413,37 @@ wifi.begin(WIFI_SSID, WIFI_PASSWORD);
 - <code>incomingBufferSize</code> is shared by all MQTT connections.
 - The buffer is allocated from the heap. If there isn't enough memory, the previous buffer stays in use.
 - The size of the MQTT client's own packet buffer is fixed at 2048 bytes, so a single incoming message larger than that can't be received, whatever the incoming buffer size.
+
+<h3 id="toc_mqtt_clock">Setting the Clock from the Dash Server</h3>
+
+<p>Event Logs and Time Graphs need accurate UTC time stamps. As well as using NTP (see the <strong>DashIO_ESP8266</strong> example), a device with an MQTT connection can get the time from the <strong>dash</strong> server. After the MQTT connection is made, send a clock request to the server in a status callback. The server replies with a clock message holding the Unix time (whole seconds since 1 January 1970, UTC), which arrives in the incoming message callback as <code>dashClock</code>. This example uses the <strong>TimeLib</strong> library to hold the time:</p>
+
+<div><pre><code class="language-none">#include &lt;TimeLib.h&gt;
+
+void processDateTime(MessageData *messageData) {
+    time_t epoch = messageData-&gt;payloadStr.toInt(); // Unix time in seconds, UTC
+    if (epoch &gt; 0) {
+        setTime(epoch); // now() then returns the UTC time
+    }
+}
+
+void processIncomingMessage(MessageData *messageData) {
+    switch (messageData-&gt;control) {
+    case dashClock:
+        processDateTime(messageData);
+        break;
+    // other controls...
+    }
+}
+
+void onStatusCallback(StatusCode statusCode) {
+    if (statusCode == mqttConnected) {
+        mqtt_con.sendMessage(dashDevice.getClockMessage(), announce_topic);
+    }
+}
+</code></pre></div>
+
+<p>Register the status callback in <code>setup()</code> with <code>dashDevice.setStatusCallback(&amp;onStatusCallback);</code>. The ESP8266 forgets the time when it resets, so the clock is requested each time the MQTT connection is made.</p>
 
 <h2 id="toc_10">Combining TCP and MQTT</h2>
 

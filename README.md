@@ -42,6 +42,7 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 - Fix crash when a BLE client disconnects before its message is processed.
 - Fix lost and corrupted BLE messages.
 - Fix off-by-one in the mDNS service name buffer.
+- Examples use *setStatusCallback* instead of the deprecated *setOnConnectCallback*. The guides now explain how to set the clock from the Dash server.
 
 ### 1.3.2 (14 October 2026)
 

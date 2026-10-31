@@ -184,8 +184,10 @@ void processButton(MessageData *messageData) {
 
 void setupWiFiMQTT();
 
-void onWiFiConnectCallback(void) {
-    timeClient.begin();
+void onStatusCallback(StatusCode statusCode) {
+    if (statusCode == wifiConnected) {
+        timeClient.begin();
+    }
 }
 
 void processIncomingMessage(MessageData *messageData) {
@@ -267,7 +269,7 @@ void setup() {
     tcp_con.setCallback(&processIncomingMessage);
     wifi.attachConnection(&tcp_con);
 
-    wifi.setOnConnectCallback(&onWiFiConnectCallback);
+    dashDevice.setStatusCallback(&onStatusCallback);
 
     mqtt_con.setCallback(&processIncomingMessage);
     mqtt_con.setup(dashProvision.dashUserName, dashProvision.dashPassword);

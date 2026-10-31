@@ -188,10 +188,12 @@ void processButton(MessageData *messageData) {
     }
 }
 
-void onWiFiConnectCallback(void) {
-    configTime(0, 0, ntpServer); // utcOffset = 0 and daylightSavingsOffset = 0, so time is UTC
-    Serial.print(F("NTP UTC Time: "));
-    Serial.println(getUTCtime());
+void onStatusCallback(StatusCode statusCode) {
+    if (statusCode == wifiConnected) {
+        configTime(0, 0, ntpServer); // utcOffset = 0 and daylightSavingsOffset = 0, so time is UTC
+        Serial.print(F("NTP UTC Time: "));
+        Serial.println(getUTCtime());
+    }
 }
 
 void processIncomingMessage(MessageData *messageData) {
@@ -278,7 +280,7 @@ void setup() {
     Serial.print(F("Device ID: "));
     Serial.println(dashDevice.deviceID);
 
-    wifi.setOnConnectCallback(&onWiFiConnectCallback);
+    dashDevice.setStatusCallback(&onStatusCallback);
 
     ble_con.setCallback(&processIncomingMessage);
     ble_con.begin(); // 6 Digid PassKey for BLE
