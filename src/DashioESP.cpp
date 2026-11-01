@@ -323,7 +323,15 @@ void DashioTCP::sendMessage(const String& message, uint8_t index) {
     if (index < maxTCPclients) {
         WiFiClient *clientPtr = &tcpClients[index].client;
         if (clientPtr->connected()) {
-            clientPtr->print(message);
+            if (clientPtr->print(message) < message.length()) {
+                // The client isn't taking data (e.g. the phone left the WiFi without closing the connection), so the write
+                // timed out. Drop the client, otherwise every later send to it blocks loop() for the same timeout.
+                clientPtr->stop();
+                if (printMessages) {
+                    Serial.println(F("TCP client dropped: write timed out"));
+                }
+                return;
+            }
             if (printMessages) {
                 Serial.println(F("---- TCP Sent ----"));
                 Serial.println(message);
