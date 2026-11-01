@@ -145,6 +145,7 @@ private:
     void checkAndSendMQTTbuffer();
     void publishMessage(const String& message, MQTTTopicType topic);
     void processConfig(const String& _dashboardID);
+    void sendConfigPiece(const String& piece);
     void handleMessage(MessageData *message);
 
     static void messageReceivedMQTTCallback(MQTTClient *client, char *topic, char *payload, int payload_length);
@@ -164,12 +165,15 @@ private:
     TaskHandle_t mqttTaskHandle = nullptr;
     String pendingTopicBuffer[will_topic];  // Non-data topics waiting for the task (index = MQTTTopicType)
     std::deque<StatusCode> pendingStatus;   // Status callbacks raised in the task, delivered from run()
+    std::deque<String> configQueue;         // Layout pieces for the task. They are published first, without waiting
+    volatile bool configActive = false;     // A layout is being queued, so other data waits until it has all been queued
     volatile bool beginRequested = false;
     volatile bool endRequested = false;
 
     static void mqttTask(void * parameter);
     void service();
     void sendPending();
+    void queueConfig(const String& piece);
     bool takeMessage();
     void dispatchStatus();
 #endif

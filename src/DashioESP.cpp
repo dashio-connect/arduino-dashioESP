@@ -39,6 +39,8 @@ const int INCOMING_BUFFER_SIZE = DashioMQTT::MIN_INCOMING_BUFFER_SIZE; // BLE's 
 const int MQTT_RETRY_S = 10; // Retry after 10 seconds
 const int MQTT_CLIENT_BUFFER_SIZE = 2048;
 const int MQTT_SEND_WAIT_MS = 1000;
+const unsigned long MQTT_HANDOVER_WAIT_MS = 3000; // Longest a sendMessage() waits for room in the hand-over buffer
+const unsigned int MQTT_CONFIG_QUEUE_MAX = 2;      // Layout pieces waiting for the MQTT task. Bounds the memory used
 const int MQTT_SEND_BUFFER_MIN = 1024;
 
 // BLE
@@ -566,14 +568,29 @@ void DashioMQTT::sendMessage(const String& message, MQTTTopicType topic) {
         if (topic >= will_topic) {
             return;
         }
-        // Hand over to the MQTT task. Like the original batching buffer, a message that doesn't fit is dropped.
-        MQTT_LOCK;
-        String& buffer = (topic == data_topic) ? mqttSendBuffer : pendingTopicBuffer[topic];
-        unsigned int maxLen = ((topic == data_topic) && (mqttBuffersize > 0)) ? mqttBuffersize : MQTT_MAX_PAYLOAD;
-        if (buffer.length() + message.length() <= maxLen) {
-            buffer += message;
+        // Hand over to the MQTT task. A burst of messages (e.g. the layout) can be bigger than the hand-over buffer, so when
+        // a message doesn't fit, wait for the MQTT task to publish what is already waiting rather than dropping the message.
+        // It is dropped only if it can never fit, if this is the MQTT task itself (it can't publish while it waits), if
+        // MQTT is not connected (nothing is being published) or if the wait times out.
+        unsigned long waitStart = millis();
+        for (;;) {
+            {
+                MQTT_LOCK;
+                String& buffer = (topic == data_topic) ? mqttSendBuffer : pendingTopicBuffer[topic];
+                unsigned int maxLen = ((topic == data_topic) && (mqttBuffersize > 0)) ? mqttBuffersize : MQTT_MAX_PAYLOAD;
+                if (buffer.length() + message.length() <= maxLen) {
+                    buffer += message;
+                    return;
+                }
+                if (buffer.length() == 0) {
+                    return; // Larger than the whole buffer, so it can never fit
+                }
+            }
+            if ((xTaskGetCurrentTaskHandle() == mqttTaskHandle) || (state != subscribed) || (millis() - waitStart > MQTT_HANDOVER_WAIT_MS)) {
+                return;
+            }
+            delay(5);
         }
-        return;
     }
 #endif
     if (mqttBuffersize >= MQTT_SEND_BUFFER_MIN && topic == data_topic) {
@@ -594,25 +611,70 @@ void DashioMQTT::sendWhoAnnounce() {
     sendMessage(dashioDevice->getWhoMessage(), announce_topic);
 }
 
+#ifdef ESP32
+// Queue a piece of the layout for the MQTT task, which publishes it ahead of all other messages and without the batching
+// wait. A piece that fits with the one before it shares its publish. If two pieces are already waiting, wait for the task
+// to publish one. A piece is dropped only if it can never be published, if this is the MQTT task itself (it can't publish
+// while it waits), if MQTT is not connected or if the wait times out.
+void DashioMQTT::queueConfig(const String& piece) {
+    if (piece.length() > MQTT_MAX_PAYLOAD) {
+        return;
+    }
+    unsigned long waitStart = millis();
+    for (;;) {
+        {
+            MQTT_LOCK;
+            if (!configQueue.empty() && (configQueue.back().length() + piece.length() <= MQTT_MAX_PAYLOAD)) {
+                configQueue.back() += piece;
+                return;
+            }
+            if (configQueue.size() < MQTT_CONFIG_QUEUE_MAX) {
+                configQueue.push_back(piece);
+                return;
+            }
+        }
+        if ((xTaskGetCurrentTaskHandle() == mqttTaskHandle) || (state != subscribed) || (millis() - waitStart > MQTT_HANDOVER_WAIT_MS)) {
+            return;
+        }
+        delay(5);
+    }
+}
+#endif
+
+void DashioMQTT::sendConfigPiece(const String& piece) {
+#ifdef ESP32
+    if (taskMode()) {
+        queueConfig(piece);
+        return;
+    }
+#endif
+    sendMessage(piece);
+}
+
 void DashioMQTT::processConfig(const String& _dashboardID) {
-    sendMessage(dashioDevice->getC64ConfigBaseMessage(_dashboardID));
-    
+#ifdef ESP32
+    configActive = true; // Other data waits, so nothing can end up in the middle of the layout
+#endif
+    String message = dashioDevice->getC64ConfigBaseMessage(_dashboardID); // The header goes out in the first piece
+
     int c64Length = strlen_P(dashioDevice->configC64Str);
     int length = 0;
-    String message = "";
     for (int k = 0; k < c64Length; k++) {
         char myChar = pgm_read_byte_near(dashioDevice->configC64Str + k);
 
         message += myChar;
         length++;
         if (length == (MQTT_CLIENT_BUFFER_SIZE / 2)) {
-            sendMessage(message);
+            sendConfigPiece(message);
             message = "";
             length = 0;
         }
     }
     message += String(END_DELIM);
-    sendMessage(message);
+    sendConfigPiece(message);
+#ifdef ESP32
+    configActive = false;
+#endif
 }
 
 void DashioMQTT::addDashStore(ControlType controlType, String controlID) {
@@ -854,11 +916,28 @@ void DashioMQTT::service() {
 // Publish whatever other tasks have handed over. Data is batched no more often than MQTT_SEND_WAIT_MS
 // when a batching buffer size was given, as in checkAndSendMQTTbuffer().
 void DashioMQTT::sendPending() {
+    // The layout has priority over everything else on the data topic: publish its pieces first, straight away
+    for (;;) {
+        String piece((char *)0);
+        {
+            MQTT_LOCK;
+            if (configQueue.empty()) {
+                break;
+            }
+            piece = configQueue.front();
+            configQueue.pop_front();
+        }
+        publishMessage(piece, data_topic);
+    }
+
     for (int t = 0; t < will_topic; t++) {
         MQTTTopicType topic = (MQTTTopicType)t;
         String message((char *)0);
         {
             MQTT_LOCK;
+            if ((topic == data_topic) && configActive) {
+                continue; // A layout is still being queued, so nothing may be published in the middle of it
+            }
             String& buffer = (topic == data_topic) ? mqttSendBuffer : pendingTopicBuffer[t];
             if (buffer.length() == 0) {
                 continue;
