@@ -32,7 +32,7 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 ## Release Notes
 
-### 1.4.0 (30 October 2026)
+### 1.4.0 (1 November 2026)
 
 - ESP32 MQTT now runs in its own task so it no longer blocks *loop()*. Set *esp32_mqtt_blocking = true* for the previous behaviour.
 - Added *DashioMQTT::incomingBufferSize* to set the incoming MQTT buffer size (default and minimum 512 bytes). Requires **Dashio** 1.2.5 or later.
