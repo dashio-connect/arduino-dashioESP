@@ -103,7 +103,18 @@ DashBLE    ble_con(&dashDevice, true, 3);
 <p>Setup the Arduino IDE serial monitor to 115200 baud and run the above code. Then run the <strong>Dash</strong> app on your mobile device and you will see connection "WHO" messages on the Arduino serial monitor as the Dash app detects and communicates with your IoT device.</p>
 
 <p><img src="https://dashio.io/wp-content/uploads/2022/09/attention_44_yellow.png" width="20"> <strong>Troubleshooting:</strong>
-Occasionally, the <strong>Dash</strong> app is unable to discover a BLE connection to the IoT device. If this occurs, try deleting the the IoT device from the Bluetooth Settings of your phone or tablet.</p>
+Occasionally, the <strong>Dash</strong> app is unable to discover a BLE connection to the IoT device. If this occurs, try deleting the IoT device from the Bluetooth Settings of your phone or tablet.</p>
+
+<p><img src="https://dashio.io/wp-content/uploads/2022/09/attention_44_yellow.png" width="20"> <strong>Troubleshooting:</strong>
+On boards where the serial monitor uses the ESP32's own USB port (ESP32-S3, C3 and C6 with <strong>Tools → USB CDC On Boot: Enabled</strong>), the IoT device can become very slow, and BLE and MQTT can stall, after you close the serial monitor while the USB cable is still plugged in. Once the serial monitor has been used, the ESP32 thinks the computer is still reading. Each <code>Serial.print()</code> then waits for the computer to take the text, for up to about 2 seconds each time. Unplugging the USB cable and plugging it back in, or moving it to another USB port on the computer, clears it until the serial monitor is used again. To stop it happening at all, add these lines straight after <code>Serial.begin(115200);</code>:</p>
+
+```
+#if ARDUINO_USB_CDC_ON_BOOT
+    Serial.setTxTimeoutMs(0);
+#endif
+```
+
+<p>The ESP32 then drops serial text that the computer isn't taking, instead of waiting. The examples included with the library already do this. The <code>#if</code> leaves the line out on boards where the serial monitor uses a separate USB-to-UART chip. Those boards don't have this problem. The downside is that very long messages, such as the layout, may be cut short in the serial monitor. This only affects what you see in the serial monitor, not the messages sent to the <strong>Dash</strong> app.</p>
 
 <p>Lets add Dial control messages that are sent to the <strong>Dash</strong> app every second. To do this we create a new task to provide a 1 second time tick and then send a Dial value message from the loop every second.</p>
 

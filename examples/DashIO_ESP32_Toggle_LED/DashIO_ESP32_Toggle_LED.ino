@@ -73,6 +73,9 @@ void setup() {
     pinMode(ledPin, OUTPUT);
     
     Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT
+    Serial.setTxTimeoutMs(0); // Native USB: don't stall when the serial monitor is closed. See the Troubleshooting notes in the guide
+#endif
     delay(1000);
     
     dashDevice.setup(wifi.macAddress(), "Toggle Button"); // unique deviceID, and device name

@@ -270,6 +270,9 @@ void oneSecondTimerTask(void *parameters) {
 
 void setup() {
     Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT
+    Serial.setTxTimeoutMs(0); // Native USB: don't stall when the serial monitor is closed. See the Troubleshooting notes in the guide
+#endif
 
     messageToSend.reserve(200);
 
