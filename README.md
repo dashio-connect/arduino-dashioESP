@@ -42,6 +42,8 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 - Fix crash when a BLE client disconnects before its message is processed.
 - Fix lost and corrupted BLE messages.
 - Fix off-by-one in the mDNS service name buffer.
+- Fix large layouts sometimes arriving incomplete over ESP32 MQTT. Layout pieces are now sent first, ahead of other messages, and messages wait for room (up to 3 s) instead of being dropped.
+- Fix TCP blocking *loop()* when a phone leaves the WiFi without closing its connection. A client that stops taking data is now dropped when a write times out, so other phones can still connect.
 - Examples use *setStatusCallback* instead of the deprecated *setOnConnectCallback*. The guides now explain how to set the clock from the Dash server.
 
 ### 1.3.2 (14 October 2026)
