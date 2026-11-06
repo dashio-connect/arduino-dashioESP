@@ -209,6 +209,14 @@ public:
     void setCallback(void (*processIncomingMessage)(MessageData *messageData));
     void begin();
     void end();
+#ifdef ESP8266
+    // TLS session resumption across deep sleep. Set before WiFi connects; the session must stay in memory (global or static).
+    // The next connection offers the saved session, which skips most of the TLS handshake if the server still has it.
+    void setTLSSession(BearSSL::Session *session);
+    // Before deep sleep: closes the connection without an MQTT disconnect, so the server publishes the Last Will (OFFLINE),
+    // and saves the TLS session in the setTLSSession() session. Call only after the last publish has been acknowledged.
+    void closeForSleep();
+#endif
 };
 
 // ---------------------------------------- WiFi ---------------------------------------

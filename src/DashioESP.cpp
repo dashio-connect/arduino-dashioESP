@@ -1093,6 +1093,18 @@ void DashioMQTT::doEnd() {
     }
     mqttClient.disconnect();
 }
+
+#ifdef ESP8266
+void DashioMQTT::setTLSSession(BearSSL::Session *session) {
+    wifiClient.setSession(session);
+}
+
+void DashioMQTT::closeForSleep() {
+    flushSendBuffer();
+    wifiClient.stop(); // The ESP8266 core saves the TLS session here
+    state = disconnected;
+}
+#endif
 #endif
 
 // ---------------------------------------- BLE ----------------------------------------

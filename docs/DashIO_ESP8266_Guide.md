@@ -1,6 +1,6 @@
 <h1 id="toc_0">Dash IoT Guide (ESP8266)</h1>
 
-**31 October 2026**
+**6 November 2026**
 
 This guide demonstrates how to make TCP and MQTT connections to an ESP8266 IoT device using the Arduino or PlatformIO IDE and the **Dash** Adruino library. It also shows how to load user controls (widgets) into your mobile device to monitor and control an IoT device.
 
@@ -444,6 +444,56 @@ void onStatusCallback(StatusCode statusCode) {
 </code></pre></div>
 
 <p>Register the status callback in <code>setup()</code> with <code>dashDevice.setStatusCallback(&amp;onStatusCallback);</code>. The ESP8266 forgets the time when it resets, so the clock is requested each time the MQTT connection is made.</p>
+
+<h3 id="toc_mqtt_sleep">Deep Sleep and Faster MQTT Connections</h3>
+
+<p>A battery-powered device that wakes from deep sleep, sends its readings and goes back to sleep spends much of each wake on the TLS handshake with the <strong>dash</strong> server, often several seconds. The server supports TLS session resumption: if the device saves the TLS session before it sleeps and offers it on the next connection, most of the handshake is skipped. Deep sleep clears RAM, so the session is kept in the ESP8266's RTC memory, which survives deep sleep.</p>
+
+<p>Two <code>DashioMQTT</code> functions do this (ESP8266 only, from version 1.4.1):</p>
+
+- <code>setTLSSession(BearSSL::Session *session)</code> gives the MQTT connection a place to keep the session. Call it in <code>setup()</code>, before the WiFi connects. The session must stay in memory, so make it a global.
+- <code>closeForSleep()</code> closes the connection and saves the TLS session. Call it just before deep sleep, instead of <code>end()</code>.
+
+<div><pre><code class="language-none">#define RTC_SESSION_OFFSET 0      // In 4-byte blocks. Keep clear of your own RTC data
+#define RTC_SESSION_MAGIC  0x7E55A10A
+
+struct RtcSession {
+    uint32_t magic;
+    BearSSL::Session session;
+};
+
+RtcSession rtcSession;
+
+void setup() {
+    ...
+    // Restore the session saved before the last deep sleep. After power-on, RTC memory holds random data
+    if (!ESP.rtcUserMemoryRead(RTC_SESSION_OFFSET, (uint32_t *)&amp;rtcSession, sizeof(rtcSession))
+        || rtcSession.magic != RTC_SESSION_MAGIC) {
+        rtcSession.magic = RTC_SESSION_MAGIC;
+        rtcSession.session = BearSSL::Session(); // Empty: the first connection does a full handshake
+    }
+    mqtt_con.setTLSSession(&amp;rtcSession.session);
+
+    mqtt_con.setup(MQTT_USER, MQTT_PASSWORD);
+    wifi.attachConnection(&amp;mqtt_con);
+    wifi.begin(WIFI_SSID, WIFI_PASSWORD);
+}
+
+void goToSleep() {
+    mqtt_con.closeForSleep(); // Saves the TLS session in rtcSession.session
+    ESP.rtcUserMemoryWrite(RTC_SESSION_OFFSET, (uint32_t *)&amp;rtcSession, sizeof(rtcSession));
+    ESP.deepSleep(SLEEP_TIME_US);
+}
+</code></pre></div>
+
+<p>Things to know:</p>
+
+- Call <code>closeForSleep()</code> only after your last message has been delivered. With QoS 1 (the default), wait until the publish has been acknowledged, or the readings may be lost.
+- <code>closeForSleep()</code> closes the connection without an MQTT disconnect, so the server publishes the device's Last Will and the device shows as OFFLINE straight away. Don't call <code>end()</code> before deep sleep: <code>end()</code> disconnects cleanly and doesn't save the session.
+- If the server no longer has the session (it expired, or the server restarted), the connection falls back to a full handshake and a new session is saved. Nothing else is needed.
+- The first connection after power-on always does a full handshake, because RTC memory is cleared when the power is removed.
+- RTC user memory is 512 bytes, addressed in 4-byte blocks. <code>RtcSession</code> takes about 92 bytes, so if your sketch keeps other data in RTC memory, give each its own offset.
+- To see the gain, time the MQTT connection with and without the saved session: a resumed handshake skips the key exchange, the slowest part on the ESP8266.
 
 <h2 id="toc_10">Combining TCP and MQTT</h2>
 
