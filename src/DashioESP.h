@@ -143,6 +143,7 @@ private:
     char *password = nullptr;
     void (*processMQTTmessageCallback)(MessageData *messageData) = nullptr;
     void checkAndSendMQTTbuffer();
+    void flushSendBuffer();
     void publishMessage(const String& message, MQTTTopicType topic);
     void processConfig(const String& _dashboardID);
     void sendConfigPiece(const String& piece);

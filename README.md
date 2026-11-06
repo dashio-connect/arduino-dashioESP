@@ -32,6 +32,11 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 ## Release Notes
 
+### 1.4.1 (2 November 2026)
+
+- Fix MQTT messages being dropped when send batching is on (the 4th *DashioMQTT* constructor argument) on the ESP8266, and on the ESP32 with *esp32_mqtt_blocking = true*. A message that doesn't fit in the send buffer is no longer dropped: what is already waiting is published first. Layout pieces are now published straight away instead of being batched, so large layouts arrive complete.
+- *DashioMQTT::end()* now publishes any batched messages before disconnecting, so they aren't lost.
+
 ### 1.4.0 (1 November 2026)
 
 - ESP32 MQTT now runs in its own task so it no longer blocks *loop()*. Set *esp32_mqtt_blocking = true* for the previous behaviour.

@@ -545,6 +545,15 @@ void DashioMQTT::checkAndSendMQTTbuffer() {
     }
 }
 
+// Not task mode: publish the batched data now, without the batching wait
+void DashioMQTT::flushSendBuffer() {
+    if (mqttSendBuffer.length() > 0) {
+        lastSentMessageTime = millis();
+        publishMessage(mqttSendBuffer, data_topic);
+        mqttSendBuffer.clear();
+    }
+}
+
 void DashioMQTT::publishMessage(const String& message, MQTTTopicType topic) {
     if (mqttClient.connected()) {
         String publishTopic = dashioDevice->getMQTTTopic(username, topic);
@@ -594,10 +603,18 @@ void DashioMQTT::sendMessage(const String& message, MQTTTopicType topic) {
     }
 #endif
     if (mqttBuffersize >= MQTT_SEND_BUFFER_MIN && topic == data_topic) {
-        if (message.length() < (mqttBuffersize - mqttSendBuffer.length())) {
-            mqttSendBuffer += message;
-            checkAndSendMQTTbuffer();
+        // A message that doesn't fit isn't dropped: what is already waiting is published first, and a message bigger
+        // than the whole buffer is published on its own
+        if (mqttSendBuffer.length() + message.length() > (unsigned int)mqttBuffersize) {
+            flushSendBuffer();
+            if (message.length() > (unsigned int)mqttBuffersize) {
+                lastSentMessageTime = millis();
+                publishMessage(message, data_topic);
+                return;
+            }
         }
+        mqttSendBuffer += message;
+        checkAndSendMQTTbuffer();
     } else {
         publishMessage(message, topic);
     }
@@ -648,7 +665,9 @@ void DashioMQTT::sendConfigPiece(const String& piece) {
         return;
     }
 #endif
-    sendMessage(piece);
+    // Not batched: anything already waiting goes first so the order is kept, then the piece goes out straight away
+    flushSendBuffer();
+    publishMessage(piece, data_topic);
 }
 
 void DashioMQTT::processConfig(const String& _dashboardID) {
@@ -1066,6 +1085,9 @@ void DashioMQTT::end() {
 }
 
 void DashioMQTT::doEnd() {
+    if (!taskMode()) {
+        flushSendBuffer(); // Batched data would otherwise be lost when the connection closes
+    }
     if (enableOnOffline) {
         publishMessage(dashioDevice->getOfflineMessage(), data_topic); // Directly, as the connection is about to close
     }
