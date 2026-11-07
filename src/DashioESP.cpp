@@ -1085,8 +1085,24 @@ void DashioMQTT::end() {
 }
 
 void DashioMQTT::doEnd() {
-    if (!taskMode()) {
-        flushSendBuffer(); // Batched data would otherwise be lost when the connection closes
+    // Publish everything still waiting, which would otherwise be lost when the connection closes
+#ifdef ESP32
+    if (taskMode()) { // Runs in the MQTT task, so it can publish what other tasks have handed over
+        sendPending(); // Layout pieces and the other topics
+        String waiting((char *)0);
+        {
+            MQTT_LOCK;
+            waiting = mqttSendBuffer; // Data sendPending() left for the batching wait
+            mqttSendBuffer.clear();
+        }
+        if (waiting.length() > 0) {
+            lastSentMessageTime = millis();
+            publishMessage(waiting, data_topic);
+        }
+    } else
+#endif
+    {
+        flushSendBuffer(); // Batched data
     }
     if (enableOnOffline) {
         publishMessage(dashioDevice->getOfflineMessage(), data_topic); // Directly, as the connection is about to close

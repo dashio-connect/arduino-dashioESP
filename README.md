@@ -36,6 +36,7 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 
 - Fix MQTT messages being dropped when send batching is on (the 4th *DashioMQTT* constructor argument) on the ESP8266, and on the ESP32 with *esp32_mqtt_blocking = true*. A message that doesn't fit in the send buffer is no longer dropped: what is already waiting is published first. Layout pieces are now published straight away instead of being batched, so large layouts arrive complete.
 - *DashioMQTT::end()* now publishes any batched messages before disconnecting, so they aren't lost.
+- ESP32: *DashioMQTT::end()* in task mode (the default) now publishes the messages still waiting for the MQTT task before disconnecting. Before, a device that sent its readings and then called *end()* straight away (e.g. to deep sleep) could lose them.
 - ESP8266: TLS session resumption for deep-sleep devices, so a wake can skip most of the TLS handshake. Set a *BearSSL::Session* with *setTLSSession()* before WiFi connects, and call *closeForSleep()* instead of *end()* before deep sleep, once the last publish has been acknowledged. *closeForSleep()* closes the connection without an MQTT disconnect, so the server still publishes the device's OFFLINE (Last Will), and saves the session. Copy the session to RTC memory before sleeping and back after waking. If the server no longer has the session, the connection falls back to a full handshake.
 
 ### 1.4.0 (1 November 2026)
