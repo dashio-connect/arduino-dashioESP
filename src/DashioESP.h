@@ -216,6 +216,10 @@ public:
     // Before deep sleep: closes the connection without an MQTT disconnect, so the server publishes the Last Will (OFFLINE),
     // and saves the TLS session in the setTLSSession() session. Call only after the last publish has been acknowledged.
     void closeForSleep();
+    // Smaller TLS buffers to free RAM (default receive buffer is 16 KB). Set before WiFi connects. The device asks the server
+    // for records no bigger than recvBytes (Max Fragment Length), which the dash server supports. A server that ignores the
+    // request can send bigger records, and the connection then fails. recvBytes and xmitBytes are 512 to 16384, e.g. 4096 and 512.
+    void setTLSBufferSizes(int recvBytes, int xmitBytes);
 #endif
 };
 

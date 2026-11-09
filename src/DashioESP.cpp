@@ -1120,6 +1120,10 @@ void DashioMQTT::closeForSleep() {
     wifiClient.stop(); // The ESP8266 core saves the TLS session here
     state = disconnected;
 }
+
+void DashioMQTT::setTLSBufferSizes(int recvBytes, int xmitBytes) {
+    wifiClient.setBufferSizes(recvBytes, xmitBytes); // The buffers are allocated when the connection opens
+}
 #endif
 #endif
 

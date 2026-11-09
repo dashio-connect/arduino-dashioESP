@@ -38,6 +38,7 @@ The **Dash** app is free and available for both Apple and Android devices. Use i
 - *DashioMQTT::end()* now publishes any batched messages before disconnecting, so they aren't lost.
 - ESP32: *DashioMQTT::end()* in task mode (the default) now publishes the messages still waiting for the MQTT task before disconnecting. Before, a device that sent its readings and then called *end()* straight away (e.g. to deep sleep) could lose them.
 - ESP8266: TLS session resumption for deep-sleep devices, so a wake can skip most of the TLS handshake. Set a *BearSSL::Session* with *setTLSSession()* before WiFi connects, and call *closeForSleep()* instead of *end()* before deep sleep, once the last publish has been acknowledged. *closeForSleep()* closes the connection without an MQTT disconnect, so the server still publishes the device's OFFLINE (Last Will), and saves the session. Copy the session to RTC memory before sleeping and back after waking. If the server no longer has the session, the connection falls back to a full handshake.
+- ESP8266: *DashioMQTT::setTLSBufferSizes()* shrinks the TLS buffers to free RAM. The receive buffer is 16 KB by default, so *setTLSBufferSizes(4096, 512)* frees about 12 KB. Call it before WiFi connects. The device asks the server to send smaller TLS records (Max Fragment Length), which the **dash** server supports. With a server that doesn't, keep the default sizes, or the connection fails.
 
 ### 1.4.0 (1 November 2026)
 
