@@ -147,6 +147,7 @@ private:
     void publishMessage(const String& message, MQTTTopicType topic);
     void processConfig(const String& _dashboardID);
     void sendConfigPiece(const String& piece);
+    void sendServerConfig();
     void handleMessage(MessageData *message);
 
     static void messageReceivedMQTTCallback(MQTTClient *client, char *topic, char *payload, int payload_length);

@@ -1027,7 +1027,11 @@ void DashioMQTT::handleMessage(MessageData *message) {
             break;
         case config:
             if (dashioDevice->configC64Str != nullptr) {
-                processConfig(message->idStr);
+                if (message->idStr == DASH_SERVER_ID) {
+                    sendServerConfig();
+                } else {
+                    processConfig(message->idStr);
+                }
             } else {
                 if (processMQTTmessageCallback != nullptr) {
                     processMQTTmessageCallback(message);
@@ -1040,6 +1044,28 @@ void DashioMQTT::handleMessage(MessageData *message) {
             }
             break;
     }
+}
+
+// The dash server asks a store and forward device for its layout with the ID DASH, so phones can load it while the device
+// is offline (dashio-connect/dash#52). The reply is the one a phone gets, but in one publish on the announce topic, where
+// the server reads it. A layout too big for one publish isn't sent, and the server asks again on the next connect.
+void DashioMQTT::sendServerConfig() {
+    String header = dashioDevice->getC64ConfigBaseMessage(DASH_SERVER_ID);
+    size_t c64Length = strlen_P(dashioDevice->configC64Str);
+    size_t length = header.length() + c64Length + 1;
+    if (length > MQTT_MAX_PAYLOAD) {
+        Serial.printf("Layout is %u bytes, over the %u bytes that can be sent to the Dash server: not sent\n",
+                      (unsigned)c64Length, (unsigned)(MQTT_MAX_PAYLOAD - header.length() - 1));
+        return;
+    }
+    String message((char *)0);
+    message.reserve(length); // Exactly the reply's size, freed once it's handed over
+    message += header;
+    for (size_t k = 0; k < c64Length; k++) {
+        message += (char)pgm_read_byte_near(dashioDevice->configC64Str + k);
+    }
+    message += String(END_DELIM);
+    sendMessage(message, announce_topic);
 }
 
 void DashioMQTT::run() {
